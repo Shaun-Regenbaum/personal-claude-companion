@@ -9,9 +9,9 @@ interface HeaderProps {
 
 const tabs = [
   { id: 'timeline', label: 'Timeline' },
-  { id: 'diffs', label: 'Diffs' },
   { id: 'plans', label: 'Plans' },
-  { id: 'config', label: 'Config' },
+  { id: 'diffs', label: 'Files' },
+  { id: 'config', label: 'Settings' },
 ]
 
 export function Header({ session, activeTab, onTabChange }: HeaderProps) {
@@ -33,7 +33,7 @@ export function Header({ session, activeTab, onTabChange }: HeaderProps) {
               className={`pzl-tab ${activeTab === 'config' ? 'pzl-tab-active' : ''}`}
               style={{ fontSize: 12, padding: '5px 14px' }}
             >
-              Config
+              Settings
             </button>
           </div>
         </div>
