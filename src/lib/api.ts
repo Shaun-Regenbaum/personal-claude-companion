@@ -65,4 +65,16 @@ export const api = {
       }>
       graph: string
     }>(`/git/${sessionId}/log?limit=${limit}`),
+
+  deleteSkill: (name: string) =>
+    fetch(`${API_BASE}/config/skills/${name}`, { method: 'DELETE' }).then((r) => r.json()),
+
+  deleteMcp: (name: string) =>
+    fetch(`${API_BASE}/config/mcp/${name}`, { method: 'DELETE' }).then((r) => r.json()),
+
+  deletePlugin: (name: string) =>
+    fetch(`${API_BASE}/config/plugins/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => r.json()),
+
+  deleteHook: (source: string, event: string, index: number) =>
+    fetch(`${API_BASE}/config/hooks/${source}/${event}/${index}`, { method: 'DELETE' }).then((r) => r.json()),
 }

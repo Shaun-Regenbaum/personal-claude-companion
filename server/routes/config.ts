@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { readFileSync, readdirSync, readlinkSync, existsSync } from 'fs'
+import { readFileSync, readdirSync, readlinkSync, existsSync, writeFileSync, unlinkSync, rmSync } from 'fs'
 import { join, basename } from 'path'
 
 const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
@@ -15,6 +15,91 @@ app.get('/', (c) => {
   const hooks = getHooks(settings)
 
   return c.json({ settings, localSettings, plugins, skills, mcpServers, hooks })
+})
+
+// Delete a skill (remove symlink)
+app.delete('/skills/:name', (c) => {
+  const name = c.req.param('name')
+  const skillPath = join(CLAUDE_DIR, 'skills', name)
+  try {
+    if (existsSync(skillPath)) {
+      rmSync(skillPath, { recursive: true })
+      return c.json({ ok: true })
+    }
+    return c.json({ error: 'Skill not found' }, 404)
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
+})
+
+// Delete an MCP server (remove from settings.json)
+app.delete('/mcp/:name', (c) => {
+  const name = c.req.param('name')
+  const settingsPath = join(CLAUDE_DIR, 'settings.json')
+  try {
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    const servers = settings.mcpServers ?? {}
+    if (!(name in servers)) {
+      return c.json({ error: 'MCP server not found' }, 404)
+    }
+    delete servers[name]
+    settings.mcpServers = servers
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n')
+    return c.json({ ok: true })
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
+})
+
+// Delete a plugin (remove from installed_plugins.json)
+app.delete('/plugins/:name', (c) => {
+  const name = c.req.param('name')
+  const pluginsPath = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
+  try {
+    const data = JSON.parse(readFileSync(pluginsPath, 'utf-8'))
+    const plugins = data.plugins ?? {}
+    if (!(name in plugins)) {
+      return c.json({ error: 'Plugin not found' }, 404)
+    }
+    delete plugins[name]
+    data.plugins = plugins
+    writeFileSync(pluginsPath, JSON.stringify(data, null, 2) + '\n')
+    return c.json({ ok: true })
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
+})
+
+// Delete a hook (remove from hooks.json or settings.json)
+app.delete('/hooks/:source/:event/:index', (c) => {
+  const source = c.req.param('source')
+  const event = c.req.param('event')
+  const index = parseInt(c.req.param('index'), 10)
+  const filePath = source === 'hooks.json'
+    ? join(CLAUDE_DIR, 'hooks.json')
+    : join(CLAUDE_DIR, 'settings.json')
+
+  try {
+    const data = JSON.parse(readFileSync(filePath, 'utf-8'))
+    const hooksObj = source === 'hooks.json' ? (data.hooks ?? {}) : (data.hooks ?? {})
+    const eventHooks = hooksObj[event]
+    if (!Array.isArray(eventHooks) || index >= eventHooks.length) {
+      return c.json({ error: 'Hook not found' }, 404)
+    }
+    eventHooks.splice(index, 1)
+    if (eventHooks.length === 0) {
+      delete hooksObj[event]
+    }
+    if (source === 'hooks.json') {
+      data.hooks = hooksObj
+    } else {
+      data.hooks = hooksObj
+    }
+    writeFileSync(filePath, JSON.stringify(data, null, 2) + '\n')
+    return c.json({ ok: true })
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
 })
 
 function readJsonSafe(path: string): Record<string, unknown> {

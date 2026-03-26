@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
-  Server, Puzzle, Zap, Wrench, Shield,
-  ChevronDown, ChevronRight, CheckCircle2, XCircle
+  Server, Puzzle, Zap, Wrench, Shield, Trash2,
+  CheckCircle2, XCircle
 } from 'lucide-react'
 import { useConfig } from '../../hooks/useConfig.ts'
 import { relativeTime } from '../../lib/format.ts'
+import { api } from '../../lib/api.ts'
 import type { McpServerInfo, PluginInfo, SkillInfo, HookInfo } from '../../lib/types.ts'
 
 type Section = 'mcp' | 'plugins' | 'skills' | 'hooks' | 'permissions'
+
+interface ConfigViewerProps {
+  sessionCwd?: string | null
+}
 
 const SECTIONS: { id: Section; label: string; icon: typeof Server }[] = [
   { id: 'mcp', label: 'MCP Servers', icon: Server },
@@ -17,9 +22,24 @@ const SECTIONS: { id: Section; label: string; icon: typeof Server }[] = [
   { id: 'permissions', label: 'Permissions', icon: Shield },
 ]
 
-export function ConfigViewer() {
-  const { config, loading } = useConfig()
+export function ConfigViewer({ sessionCwd }: ConfigViewerProps) {
+  const { config, loading, refresh } = useConfig()
   const [activeSection, setActiveSection] = useState<Section>('mcp')
+
+  const handleDelete = useCallback(async (type: string, name: string, extra?: { source?: string; event?: string; index?: number }) => {
+    const confirmed = window.confirm(`Delete ${type} "${name}"?`)
+    if (!confirmed) return
+
+    try {
+      if (type === 'skill') await api.deleteSkill(name)
+      else if (type === 'MCP server') await api.deleteMcp(name)
+      else if (type === 'plugin') await api.deletePlugin(name)
+      else if (type === 'hook' && extra) await api.deleteHook(extra.source!, extra.event!, extra.index!)
+      refresh()
+    } catch {
+      // ignore
+    }
+  }, [refresh])
 
   if (loading || !config) {
     return (
@@ -38,7 +58,20 @@ export function ConfigViewer() {
         borderRight: '1px solid var(--color-border)',
         padding: '12px 0',
       }}>
-        <div className="pzl-card-title" style={{ padding: '0 12px 8px' }}>Config</div>
+        <div className="pzl-card-title" style={{ padding: '0 12px 4px' }}>Global Config</div>
+        {sessionCwd && (
+          <div style={{
+            padding: '0 12px 8px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--color-text-muted)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {sessionCwd}
+          </div>
+        )}
         {SECTIONS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -82,17 +115,39 @@ export function ConfigViewer() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-        {activeSection === 'mcp' && <McpSection servers={config.mcpServers} />}
-        {activeSection === 'plugins' && <PluginsSection plugins={config.plugins} />}
-        {activeSection === 'skills' && <SkillsSection skills={config.skills} />}
-        {activeSection === 'hooks' && <HooksSection hooks={config.hooks} />}
+        {activeSection === 'mcp' && <McpSection servers={config.mcpServers} onDelete={handleDelete} />}
+        {activeSection === 'plugins' && <PluginsSection plugins={config.plugins} onDelete={handleDelete} />}
+        {activeSection === 'skills' && <SkillsSection skills={config.skills} onDelete={handleDelete} />}
+        {activeSection === 'hooks' && <HooksSection hooks={config.hooks} onDelete={handleDelete} />}
         {activeSection === 'permissions' && <PermissionsSection settings={config.settings} localSettings={config.localSettings} />}
       </div>
     </div>
   )
 }
 
-function McpSection({ servers }: { servers: McpServerInfo[] }) {
+function DeleteButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 3,
+        color: 'var(--color-text-muted)',
+        display: 'flex',
+        borderRadius: 3,
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.color = '#dc322f' }}
+      onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)' }}
+      title="Delete"
+    >
+      <Trash2 size={13} strokeWidth={2} />
+    </button>
+  )
+}
+
+function McpSection({ servers, onDelete }: { servers: McpServerInfo[]; onDelete: (type: string, name: string) => void }) {
   if (servers.length === 0) return <EmptyState text="No MCP servers configured" />
 
   return (
@@ -101,7 +156,7 @@ function McpSection({ servers }: { servers: McpServerInfo[] }) {
         <div key={server.name} className="pzl-card" style={{ padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <Server size={14} style={{ color: server.enabled ? '#859900' : 'var(--color-text-muted)' }} strokeWidth={2} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
               {server.name}
             </span>
             <span style={{
@@ -116,6 +171,7 @@ function McpSection({ servers }: { servers: McpServerInfo[] }) {
             }}>
               {server.enabled ? 'Enabled' : 'Disabled'}
             </span>
+            <DeleteButton onClick={() => onDelete('MCP server', server.name)} />
           </div>
           {server.command && (
             <div style={{
@@ -139,7 +195,7 @@ function McpSection({ servers }: { servers: McpServerInfo[] }) {
   )
 }
 
-function PluginsSection({ plugins }: { plugins: PluginInfo[] }) {
+function PluginsSection({ plugins, onDelete }: { plugins: PluginInfo[]; onDelete: (type: string, name: string) => void }) {
   if (plugins.length === 0) return <EmptyState text="No plugins installed" />
 
   return (
@@ -148,7 +204,7 @@ function PluginsSection({ plugins }: { plugins: PluginInfo[] }) {
         <div key={`${plugin.name}-${i}`} className="pzl-card" style={{ padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <Puzzle size={14} style={{ color: '#6c71c4' }} strokeWidth={2} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
               {plugin.name.split('@')[0]}
             </span>
             <span style={{
@@ -167,6 +223,7 @@ function PluginsSection({ plugins }: { plugins: PluginInfo[] }) {
                 v{plugin.version}
               </span>
             )}
+            <DeleteButton onClick={() => onDelete('plugin', plugin.name)} />
           </div>
           <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--color-text-muted)' }}>
             <span style={{ fontFamily: 'var(--font-mono)' }}>
@@ -182,7 +239,7 @@ function PluginsSection({ plugins }: { plugins: PluginInfo[] }) {
   )
 }
 
-function SkillsSection({ skills }: { skills: SkillInfo[] }) {
+function SkillsSection({ skills, onDelete }: { skills: SkillInfo[]; onDelete: (type: string, name: string) => void }) {
   if (skills.length === 0) return <EmptyState text="No skills configured" />
 
   return (
@@ -213,62 +270,69 @@ function SkillsSection({ skills }: { skills: SkillInfo[] }) {
           }}>
             {skill.target}
           </span>
+          <DeleteButton onClick={() => onDelete('skill', skill.name)} />
         </div>
       ))}
     </div>
   )
 }
 
-function HooksSection({ hooks }: { hooks: HookInfo[] }) {
+function HooksSection({ hooks, onDelete }: { hooks: HookInfo[]; onDelete: (type: string, name: string, extra: { source: string; event: string; index: number }) => void }) {
   if (hooks.length === 0) return <EmptyState text="No hooks configured" />
+
+  // Group by event for counting index per source+event
+  const indexMap = new Map<string, number>()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {hooks.map((hook, i) => (
-        <div key={i} className="pzl-card" style={{ padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <Zap size={14} style={{ color: '#b58900' }} strokeWidth={2} />
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
-              {hook.event}
-            </span>
-            {hook.matcher !== '*' && (
-              <span style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--color-text-muted)',
-                background: 'var(--color-bg-tertiary)',
-                padding: '1px 5px',
-                borderRadius: 2,
-              }}>
-                {hook.matcher}
+      {hooks.map((hook, i) => {
+        const key = `${hook.source}:${hook.event}`
+        const idx = indexMap.get(key) ?? 0
+        indexMap.set(key, idx + 1)
+
+        return (
+          <div key={i} className="pzl-card" style={{ padding: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <Zap size={14} style={{ color: '#b58900' }} strokeWidth={2} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
+                {hook.event}
               </span>
-            )}
-            <span style={{
-              fontSize: 9,
-              color: 'var(--color-text-muted)',
-              marginLeft: 'auto',
+              {hook.matcher !== '*' && (
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 10,
+                  color: 'var(--color-text-muted)',
+                  background: 'var(--color-bg-tertiary)',
+                  padding: '1px 5px',
+                  borderRadius: 2,
+                }}>
+                  {hook.matcher}
+                </span>
+              )}
+              <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>
+                {hook.source}
+              </span>
+              <DeleteButton onClick={() => onDelete('hook', hook.event, { source: hook.source, event: hook.event, index: idx })} />
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--color-text-secondary)',
+              background: 'var(--color-bg-tertiary)',
+              padding: '6px 8px',
+              borderRadius: 3,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-all',
+              maxHeight: 120,
+              overflow: 'auto',
+              lineHeight: 1.5,
             }}>
-              {hook.source}
-            </span>
+              {hook.command}
+            </div>
           </div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            fontWeight: 500,
-            color: 'var(--color-text-secondary)',
-            background: 'var(--color-bg-tertiary)',
-            padding: '6px 8px',
-            borderRadius: 3,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-all',
-            maxHeight: 120,
-            overflow: 'auto',
-            lineHeight: 1.5,
-          }}>
-            {hook.command}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

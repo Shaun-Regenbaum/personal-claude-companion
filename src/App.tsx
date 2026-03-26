@@ -134,9 +134,9 @@ function App() {
             />
           )}
           {activeTab === 'config' && (
-            <ConfigViewer />
+            <ConfigViewer sessionCwd={selectedSession?.cwd ?? null} />
           )}
-          {!selectedSessionId && (
+          {!selectedSessionId && activeTab !== 'config' && (
             <div style={{
               display: 'flex',
               alignItems: 'center',

@@ -17,14 +17,26 @@ const tabs = [
 export function Header({ session, activeTab, onTabChange }: HeaderProps) {
   if (!session) {
     return (
-      <div style={{
-        borderBottom: '1px solid var(--color-border)',
-        padding: '12px 24px',
-        background: 'var(--color-bg-secondary)',
-        color: 'var(--color-text-muted)',
-        fontSize: 12,
-      }}>
-        Select a session
+      <div style={{ borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{
+          padding: '12px 24px',
+          background: 'var(--color-bg-secondary)',
+          color: 'var(--color-text-muted)',
+          fontSize: 12,
+        }}>
+          Select a session to view timeline, diffs, and plans
+        </div>
+        <div style={{ padding: '4px 16px 6px', background: 'var(--color-bg-secondary)' }}>
+          <div className="pzl-tabs" style={{ display: 'inline-flex' }}>
+            <button
+              onClick={() => onTabChange('config')}
+              className={`pzl-tab ${activeTab === 'config' ? 'pzl-tab-active' : ''}`}
+              style={{ fontSize: 12, padding: '5px 14px' }}
+            >
+              Config
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
