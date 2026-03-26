@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { useSessions } from './hooks/useSessions.ts'
 import { useConversation } from './hooks/useConversation.ts'
 import { useSSE } from './hooks/useSSE.ts'
@@ -10,6 +10,7 @@ function App() {
   const { sessions, loading: sessionsLoading, refresh: refreshSessions } = useSessions()
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('timeline')
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { messages, loading: conversationLoading, refresh: refreshConversation } =
     useConversation(selectedSessionId)
@@ -18,6 +19,18 @@ function App() {
     () => sessions.find((s) => s.sessionId === selectedSessionId) ?? null,
     [sessions, selectedSessionId]
   )
+
+  // Scroll to bottom when switching sessions
+  useEffect(() => {
+    if (selectedSessionId && scrollRef.current) {
+      // Wait for render, then scroll
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+      })
+    }
+  }, [selectedSessionId, messages.length])
 
   useSSE({
     'session-update': useCallback(() => {
@@ -73,7 +86,7 @@ function App() {
           onTabChange={setActiveTab}
         />
 
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
           {activeTab === 'timeline' && selectedSessionId && (
             <TimelineView messages={messages} loading={conversationLoading} />
           )}

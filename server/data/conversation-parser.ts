@@ -139,6 +139,17 @@ function extractContent(
     if (block.type === 'thinking') {
       return { type: 'thinking', thinking: block.thinking as string }
     }
+    if (block.type === 'image') {
+      const source = block.source as Record<string, unknown>
+      return {
+        type: 'image',
+        source: {
+          type: (source?.type as string) ?? 'base64',
+          media_type: (source?.media_type as string) ?? 'image/png',
+          data: (source?.data as string) ?? '',
+        },
+      }
+    }
     return { type: 'text', text: JSON.stringify(block) }
   })
 }

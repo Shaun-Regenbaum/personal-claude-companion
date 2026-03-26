@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../lib/api.ts'
 import type { ConversationMessage } from '../lib/types.ts'
 
@@ -7,6 +7,7 @@ export function useConversation(sessionId: string | null) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(async () => {
     if (!sessionId) {
@@ -15,9 +16,9 @@ export function useConversation(sessionId: string | null) {
       return
     }
 
-    setLoading(true)
     try {
-      const data = await api.getConversation(sessionId, { limit: 500 })
+      // Load all messages — files are a few MB max, browser handles it fine
+      const data = await api.getConversation(sessionId, { limit: 50000 })
       setMessages(data.messages)
       setTotal(data.total)
       setError(null)
@@ -29,8 +30,17 @@ export function useConversation(sessionId: string | null) {
   }, [sessionId])
 
   useEffect(() => {
+    setLoading(true)
     load()
-  }, [load])
+
+    if (sessionId) {
+      intervalRef.current = setInterval(load, 3000)
+    }
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [load, sessionId])
 
   return { messages, total, loading, error, refresh: load }
 }

@@ -1,31 +1,56 @@
 import { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
 import { subscribe } from '../watch/event-bus.ts'
 
 const app = new Hono()
 
 app.get('/', async (c) => {
-  return streamSSE(c, async (stream) => {
-    const unsubscribe = subscribe((event) => {
-      stream.writeSSE({
-        event: event.type,
-        data: JSON.stringify(event),
+  // Set SSE headers manually for better proxy compatibility
+  c.header('Content-Type', 'text/event-stream')
+  c.header('Cache-Control', 'no-cache')
+  c.header('Connection', 'keep-alive')
+  c.header('X-Accel-Buffering', 'no')
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder()
+
+      const send = (event: string, data: string) => {
+        try {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`))
+        } catch {
+          // Stream closed
+        }
+      }
+
+      // Send initial connection event
+      send('connected', JSON.stringify({ timestamp: new Date().toISOString() }))
+
+      // Subscribe to file watcher events
+      const unsubscribe = subscribe((event) => {
+        send(event.type, JSON.stringify(event))
       })
-    })
 
-    // Send keepalive every 30s
-    const keepalive = setInterval(() => {
-      stream.writeSSE({ event: 'keepalive', data: '' })
-    }, 30_000)
+      // Keepalive every 15s (more frequent to prevent proxy timeout)
+      const keepalive = setInterval(() => {
+        send('keepalive', '')
+      }, 15_000)
 
-    // Wait until the stream is closed
-    stream.onAbort(() => {
-      unsubscribe()
-      clearInterval(keepalive)
-    })
+      // Cleanup on close
+      c.req.raw.signal.addEventListener('abort', () => {
+        unsubscribe()
+        clearInterval(keepalive)
+        try { controller.close() } catch { /* already closed */ }
+      })
+    },
+  })
 
-    // Keep the stream alive
-    await new Promise(() => {})
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
   })
 })
 

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { User, Sparkles, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { User, Sparkles, ChevronDown, ChevronRight, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import type { ConversationMessage, MessageContent } from '../../lib/types.ts'
 import { ToolCallBlock } from './ToolCallBlock.tsx'
 import { formatTimestamp } from '../../lib/format.ts'
@@ -54,6 +54,9 @@ export function TimelineMessage({ message, toolResults }: TimelineMessageProps) 
   )
   const thinkingBlocks = message.content.filter((b): b is Extract<MessageContent, { type: 'thinking' }> =>
     b.type === 'thinking'
+  )
+  const imageBlocks = message.content.filter((b): b is Extract<MessageContent, { type: 'image' }> =>
+    b.type === 'image'
   )
 
   const hasText = textBlocks.length > 0
@@ -140,6 +143,16 @@ export function TimelineMessage({ message, toolResults }: TimelineMessageProps) 
         <ThinkingRow key={`think-${i}`} text={block.thinking} />
       ))}
 
+      {/* Images */}
+      {imageBlocks.map((block, i) => (
+        <div key={`img-${i}`} style={{ paddingLeft: 74, padding: '4px 0 4px 74px' }}>
+          <ImagePreview
+            data={block.source.data}
+            mediaType={block.source.media_type}
+          />
+        </div>
+      ))}
+
       {/* Tool calls */}
       {toolBlocks.map((block) => (
         <div key={block.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -215,5 +228,73 @@ function ThinkingRow({ text }: { text: string }) {
         </pre>
       )}
     </div>
+  )
+}
+
+function ImagePreview({ data, mediaType }: { data: string; mediaType: string }) {
+  const [hovered, setHovered] = useState(false)
+  const [open, setOpen] = useState(false)
+
+  const src = `data:${mediaType};base64,${data}`
+
+  return (
+    <>
+      <div
+        style={{ display: 'inline-block', cursor: 'pointer' }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onClick={() => setOpen(true)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ImageIcon size={13} style={{ color: '#6c71c4' }} strokeWidth={2} />
+          <img
+            src={src}
+            style={{
+              height: hovered ? 48 : 32,
+              maxWidth: hovered ? 180 : 120,
+              objectFit: 'cover',
+              borderRadius: 3,
+              border: `1px solid ${hovered ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              transition: 'all 0.15s ease',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Full-size overlay on click */}
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <div style={{
+            background: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            padding: 8,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+          }}>
+            <img
+              src={src}
+              style={{
+                maxWidth: '85vw',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   )
 }

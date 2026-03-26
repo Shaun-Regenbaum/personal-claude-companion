@@ -34,7 +34,7 @@ export function TimelineView({ messages, loading }: TimelineViewProps) {
     })
   }, [messages])
 
-  if (loading) {
+  if (loading && messages.length === 0) {
     return (
       <div style={{
         display: 'flex',

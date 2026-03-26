@@ -7,6 +7,17 @@ export default defineConfig({
   server: {
     port: 3847,
     proxy: {
+      '/api/events': {
+        target: 'http://localhost:3848',
+        changeOrigin: true,
+        // SSE needs these to prevent buffering
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['cache-control'] = 'no-cache'
+            proxyRes.headers['x-accel-buffering'] = 'no'
+          })
+        },
+      },
       '/api': {
         target: 'http://localhost:3848',
         changeOrigin: true,
