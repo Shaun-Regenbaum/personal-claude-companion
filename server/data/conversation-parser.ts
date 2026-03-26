@@ -158,42 +158,117 @@ export function invalidateConversationCache(jsonlPath: string): void {
   parseCache.delete(jsonlPath)
 }
 
-export function getConversationEdits(jsonlPath: string) {
+export interface FileOperation {
+  timestamp: string
+  filePath: string
+  toolName: string
+  toolUseId: string
+  messageUuid: string
+  // Edit
+  oldString?: string
+  newString?: string
+  // Write
+  content?: string
+  // Read
+  readContent?: string
+  // Bash
+  command?: string
+  commandDescription?: string
+  output?: string
+}
+
+export interface CommitInfo {
+  hash: string
+  message: string
+  timestamp: string
+  messageUuid: string
+}
+
+export function getFileOperations(jsonlPath: string): {
+  operations: FileOperation[]
+  commits: CommitInfo[]
+} {
   const messages = getAllMessages(jsonlPath)
-  const edits: Array<{
-    timestamp: string
-    filePath: string
-    toolName: string
-    oldString?: string
-    newString?: string
-    content?: string
-    messageUuid: string
-  }> = []
+  const operations: FileOperation[] = []
+  const commits: CommitInfo[] = []
+
+  // Build tool result map for Read/Bash outputs
+  const toolResultMap = new Map<string, string>()
+  for (const msg of messages) {
+    if (msg.type !== 'user') continue
+    for (const block of msg.content) {
+      if (block.type === 'tool_result' && block.tool_use_id) {
+        const text = block.content
+          .map((c) => (c.type === 'text' ? c.text : ''))
+          .join('\n')
+        toolResultMap.set(block.tool_use_id, text)
+      }
+    }
+  }
 
   for (const msg of messages) {
     if (msg.type !== 'assistant') continue
     for (const block of msg.content) {
       if (block.type !== 'tool_use') continue
+
+      const base = {
+        timestamp: msg.timestamp,
+        toolUseId: block.id,
+        messageUuid: msg.uuid,
+      }
+
       if (block.name === 'Edit') {
-        edits.push({
-          timestamp: msg.timestamp,
+        operations.push({
+          ...base,
           filePath: block.input.file_path as string,
           toolName: 'Edit',
           oldString: block.input.old_string as string,
           newString: block.input.new_string as string,
-          messageUuid: msg.uuid,
         })
       } else if (block.name === 'Write') {
-        edits.push({
-          timestamp: msg.timestamp,
+        operations.push({
+          ...base,
           filePath: block.input.file_path as string,
           toolName: 'Write',
           content: block.input.content as string,
-          messageUuid: msg.uuid,
+        })
+      } else if (block.name === 'Read') {
+        const result = toolResultMap.get(block.id)
+        operations.push({
+          ...base,
+          filePath: block.input.file_path as string,
+          toolName: 'Read',
+          readContent: result?.slice(0, 50000),
+        })
+      } else if (block.name === 'Bash') {
+        const cmd = (block.input.command as string) ?? ''
+        const result = toolResultMap.get(block.id)
+
+        // Detect git commits
+        if (cmd.includes('git commit')) {
+          const hashMatch = result?.match(/\[[\w-]+ ([a-f0-9]+)\]/)
+          const msgMatch = result?.match(/\] (.+)/)
+          if (hashMatch) {
+            commits.push({
+              hash: hashMatch[1],
+              message: msgMatch?.[1] ?? '',
+              timestamp: msg.timestamp,
+              messageUuid: msg.uuid,
+            })
+          }
+        }
+
+        operations.push({
+          ...base,
+          filePath: '',
+          toolName: 'Bash',
+          command: cmd,
+          commandDescription: block.input.description as string,
+          output: result?.slice(0, 20000),
         })
       }
     }
   }
 
-  return edits
+  return { operations, commits }
 }

@@ -7,9 +7,10 @@ import { formatTimestamp } from '../../lib/format.ts'
 interface TimelineMessageProps {
   message: ConversationMessage
   toolResults: Map<string, string>
+  onNavigateToTool?: (toolUseId: string) => void
 }
 
-export function TimelineMessage({ message, toolResults }: TimelineMessageProps) {
+export function TimelineMessage({ message, toolResults, onNavigateToTool }: TimelineMessageProps) {
   const [textExpanded, setTextExpanded] = useState(false)
 
   if (message.type === 'file-history-snapshot') {
@@ -174,8 +175,10 @@ export function TimelineMessage({ message, toolResults }: TimelineMessageProps) 
           <div style={{ flex: 1, paddingLeft: 18 }}>
             <ToolCallBlock
               name={block.name}
+              toolUseId={block.id}
               input={block.input}
               result={toolResults.get(block.id)}
+              onNavigate={onNavigateToTool}
             />
           </div>
         </div>

@@ -6,6 +6,7 @@ import { SessionList } from './components/sessions/SessionList.tsx'
 import { Header } from './components/layout/Header.tsx'
 import { TimelineView } from './components/timeline/TimelineView.tsx'
 import { PlanViewer } from './components/plans/PlanViewer.tsx'
+import { DiffsViewer } from './components/diffs/DiffsViewer.tsx'
 import { extractPlanReferences, extractTasks, getReferencedPlans } from './lib/plan-linker.ts'
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('timeline')
   const [focusedPlan, setFocusedPlan] = useState<string | null>(null)
+  const [focusedToolUseId, setFocusedToolUseId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const { messages, loading: conversationLoading, refresh: refreshConversation } =
@@ -66,6 +68,12 @@ function App() {
     setActiveTab('plans')
   }, [])
 
+  // Navigate from timeline tool call to diffs tab
+  const handleNavigateToTool = useCallback((toolUseId: string) => {
+    setFocusedToolUseId(toolUseId)
+    setActiveTab('diffs')
+  }, [])
+
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
       {/* Sidebar */}
@@ -108,10 +116,14 @@ function App() {
               planRefs={planRefs}
               taskEvents={taskEvents}
               onClickPlan={handleClickPlan}
+              onNavigateToTool={handleNavigateToTool}
             />
           )}
           {activeTab === 'diffs' && selectedSessionId && (
-            <PlaceholderTab name="Diffs" />
+            <DiffsViewer
+              sessionId={selectedSessionId}
+              initialToolUseId={focusedToolUseId}
+            />
           )}
           {activeTab === 'plans' && (
             <PlanViewer

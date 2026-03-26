@@ -37,8 +37,11 @@ export const api = {
     }>(`/conversations/${sessionId}${qs ? `?${qs}` : ''}`)
   },
 
-  getEdits: (sessionId: string) =>
-    fetchJson<{ edits: import('./types.ts').EditAction[] }>(`/conversations/${sessionId}/edits`),
+  getOperations: (sessionId: string) =>
+    fetchJson<{
+      operations: import('./types.ts').FileOperation[]
+      commits: import('./types.ts').CommitInfo[]
+    }>(`/conversations/${sessionId}/operations`),
 
   getPlans: () =>
     fetchJson<{ plans: import('./types.ts').PlanSummary[] }>('/plans'),

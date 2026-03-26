@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { discoverSessions } from '../data/session-discovery.ts'
-import { parseConversation, getConversationEdits } from '../data/conversation-parser.ts'
+import { parseConversation, getFileOperations } from '../data/conversation-parser.ts'
 
 const app = new Hono()
 
@@ -25,7 +25,7 @@ app.get('/:sessionId', async (c) => {
   })
 })
 
-app.get('/:sessionId/edits', async (c) => {
+app.get('/:sessionId/operations', async (c) => {
   const sessionId = c.req.param('sessionId')
 
   const sessions = await discoverSessions()
@@ -34,8 +34,8 @@ app.get('/:sessionId/edits', async (c) => {
     return c.json({ error: 'Session not found' }, 404)
   }
 
-  const edits = getConversationEdits(session.jsonlPath)
-  return c.json({ edits })
+  const { operations, commits } = getFileOperations(session.jsonlPath)
+  return c.json({ operations, commits })
 })
 
 export default app

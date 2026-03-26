@@ -23,11 +23,13 @@ const DEFAULT_STYLE = { icon: FileText, color: '#657b83', label: 'Tool' }
 
 interface ToolCallBlockProps {
   name: string
+  toolUseId?: string
   input: Record<string, unknown>
   result?: string
+  onNavigate?: (toolUseId: string) => void
 }
 
-export function ToolCallBlock({ name, input, result }: ToolCallBlockProps) {
+export function ToolCallBlock({ name, toolUseId, input, result, onNavigate }: ToolCallBlockProps) {
   const [expanded, setExpanded] = useState(false)
   const style = TOOL_STYLES[name] ?? DEFAULT_STYLE
   const Icon = style.icon
@@ -85,6 +87,22 @@ export function ToolCallBlock({ name, input, result }: ToolCallBlockProps) {
             flexShrink: 0,
           }}>
             {getEditStats(name, input)}
+          </span>
+        )}
+        {onNavigate && toolUseId && ['Edit', 'Write', 'Read', 'Bash'].includes(name) && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onNavigate(toolUseId) }}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              fontWeight: 600,
+              color: 'var(--color-accent)',
+              flexShrink: 0,
+              cursor: 'pointer',
+              padding: '1px 4px',
+            }}
+          >
+            VIEW
           </span>
         )}
       </button>

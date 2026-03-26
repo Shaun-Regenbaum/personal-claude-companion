@@ -11,9 +11,10 @@ interface TimelineViewProps {
   planRefs: PlanReference[]
   taskEvents: TaskEvent[]
   onClickPlan: (planName: string) => void
+  onNavigateToTool?: (toolUseId: string) => void
 }
 
-export function TimelineView({ messages, loading, planRefs, taskEvents, onClickPlan }: TimelineViewProps) {
+export function TimelineView({ messages, loading, planRefs, taskEvents, onClickPlan, onNavigateToTool }: TimelineViewProps) {
   const toolResults = useMemo(() => {
     const map = new Map<string, string>()
     for (const msg of messages) {
@@ -104,7 +105,7 @@ export function TimelineView({ messages, loading, planRefs, taskEvents, onClickP
             {taskEvts?.map((evt, i) => (
               <TaskMarker key={`task-${evt.taskId}-${i}`} event={evt} />
             ))}
-            <TimelineMessage message={msg} toolResults={toolResults} />
+            <TimelineMessage message={msg} toolResults={toolResults} onNavigateToTool={onNavigateToTool} />
           </div>
         )
       })}

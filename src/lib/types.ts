@@ -38,13 +38,25 @@ export interface TokenUsage {
   cache_read_input_tokens?: number
 }
 
-export interface EditAction {
+export interface FileOperation {
   timestamp: string
   filePath: string
-  toolName: 'Edit' | 'Write'
+  toolName: string
+  toolUseId: string
+  messageUuid: string
   oldString?: string
   newString?: string
   content?: string
+  readContent?: string
+  command?: string
+  commandDescription?: string
+  output?: string
+}
+
+export interface CommitInfo {
+  hash: string
+  message: string
+  timestamp: string
   messageUuid: string
 }
 
