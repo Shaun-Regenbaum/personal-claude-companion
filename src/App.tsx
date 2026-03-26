@@ -32,19 +32,18 @@ function App() {
   const { tasks, events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
 
   // Scroll to bottom when messages first load after switching sessions
+  // Scroll to bottom when messages load for a new session
   const lastScrolledSession = useRef<string | null>(null)
   useEffect(() => {
     if (!selectedSessionId || conversationLoading || messages.length === 0) return
     if (lastScrolledSession.current === selectedSessionId) return
     lastScrolledSession.current = selectedSessionId
-    // Double rAF to ensure DOM has painted
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-        }
-      })
-    })
+    // Use setTimeout to wait for React to finish rendering all messages
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }
+    }, 100)
   }, [selectedSessionId, conversationLoading, messages.length])
 
   useSSE({
@@ -137,6 +136,9 @@ function App() {
             <PlanViewer
               sessionPlanNames={sessionPlanNames}
               initialPlan={focusedPlan}
+              tasks={tasks}
+              taskEvents={taskEvents}
+              planRefs={planRefs}
             />
           )}
           {activeTab === 'config' && (

@@ -1,16 +1,20 @@
 import { useState, useMemo } from 'react'
-import { FileText, Clock } from 'lucide-react'
+import { FileText, Clock, ListChecks, Play, CheckCircle2, Circle, Pencil } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { usePlans, usePlanContent } from '../../hooks/usePlans.ts'
-import { relativeTime } from '../../lib/format.ts'
+import { relativeTime, formatTimestamp } from '../../lib/format.ts'
 import type { PlanSummary } from '../../lib/types.ts'
+import type { TaskEvent, TaskInfo, PlanReference } from '../../lib/plan-linker.ts'
 
 interface PlanViewerProps {
   sessionPlanNames: string[]
   initialPlan?: string | null
+  tasks: TaskInfo[]
+  taskEvents: TaskEvent[]
+  planRefs: PlanReference[]
 }
 
-export function PlanViewer({ sessionPlanNames, initialPlan }: PlanViewerProps) {
+export function PlanViewer({ sessionPlanNames, initialPlan, tasks, taskEvents, planRefs }: PlanViewerProps) {
   const { plans, loading: plansLoading } = usePlans()
   const [selectedPlan, setSelectedPlan] = useState<string | null>(initialPlan ?? null)
   const { content, loading: contentLoading } = usePlanContent(selectedPlan)
@@ -55,6 +59,11 @@ export function PlanViewer({ sessionPlanNames, initialPlan }: PlanViewerProps) {
               onSelect={() => setSelectedPlan(plan.name)}
             />
           ))
+        )}
+
+        {/* Activity history */}
+        {(taskEvents.length > 0 || planRefs.length > 0) && (
+          <ActivityHistory tasks={tasks} taskEvents={taskEvents} planRefs={planRefs} />
         )}
       </div>
 
@@ -160,6 +169,119 @@ function PlanListItem({ plan, isSelected, isSessionPlan, onSelect }: {
             </span>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ActivityHistory({ tasks, taskEvents, planRefs }: {
+  tasks: TaskInfo[]
+  taskEvents: TaskEvent[]
+  planRefs: PlanReference[]
+}) {
+  // Merge plan refs and task events into a single timeline, sorted chronologically
+  type HistoryEntry =
+    | { type: 'plan'; ts: string; planName: string; action: string }
+    | { type: 'task'; ts: string; taskId: string; event: string; subject: string }
+
+  const entries: HistoryEntry[] = [
+    ...planRefs.map((r) => ({
+      type: 'plan' as const,
+      ts: r.timestamp,
+      planName: r.planName,
+      action: r.action,
+    })),
+    ...taskEvents.map((e) => ({
+      type: 'task' as const,
+      ts: e.timestamp,
+      taskId: e.taskId,
+      event: e.event,
+      subject: e.subject,
+    })),
+  ].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+
+  if (entries.length === 0) return null
+
+  const TASK_ICONS = {
+    created: { icon: ListChecks, color: '#268bd2' },
+    started: { icon: Play, color: '#b58900' },
+    completed: { icon: CheckCircle2, color: '#859900' },
+  }
+
+  const PLAN_ICONS = {
+    write: { icon: FileText, color: '#268bd2' },
+    edit: { icon: Pencil, color: '#6c71c4' },
+    'exit-plan-mode': { icon: CheckCircle2, color: '#859900' },
+  }
+
+  return (
+    <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 0' }}>
+      <div className="pzl-card-title" style={{ padding: '4px 12px 6px' }}>
+        History
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {entries.map((entry, i) => {
+          if (entry.type === 'plan') {
+            const cfg = PLAN_ICONS[entry.action as keyof typeof PLAN_ICONS] ?? PLAN_ICONS.write
+            const Icon = cfg.icon
+            const label = entry.action === 'write' ? 'Plan created'
+              : entry.action === 'edit' ? 'Plan updated'
+              : 'Plan approved'
+            const displayName = entry.planName.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+
+            return (
+              <div key={`plan-${i}`} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '3px 12px',
+                fontSize: 10,
+                fontFamily: 'var(--font-mono)',
+              }}>
+                <span style={{ color: 'var(--color-text-muted)', width: 36, flexShrink: 0, textAlign: 'right' }}>
+                  {formatTimestamp(entry.ts)}
+                </span>
+                <Icon size={11} style={{ color: cfg.color, flexShrink: 0 }} strokeWidth={2} />
+                <span style={{ color: cfg.color, fontWeight: 600, flexShrink: 0 }}>{label}</span>
+                <span style={{ color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {displayName}
+                </span>
+              </div>
+            )
+          }
+
+          const cfg = TASK_ICONS[entry.event as keyof typeof TASK_ICONS] ?? TASK_ICONS.created
+          const Icon = cfg.icon
+          const label = entry.event === 'created' ? 'Task'
+            : entry.event === 'started' ? 'Started'
+            : 'Done'
+
+          return (
+            <div key={`task-${i}`} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '3px 12px',
+              fontSize: 10,
+              fontFamily: 'var(--font-mono)',
+            }}>
+              <span style={{ color: 'var(--color-text-muted)', width: 36, flexShrink: 0, textAlign: 'right' }}>
+                {formatTimestamp(entry.ts)}
+              </span>
+              <Icon size={11} style={{ color: cfg.color, flexShrink: 0 }} strokeWidth={2} />
+              <span style={{ color: cfg.color, fontWeight: 600, flexShrink: 0 }}>{label}</span>
+              <span style={{
+                color: entry.event === 'completed' ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                textDecoration: entry.event === 'completed' ? 'line-through' : 'none',
+              }}>
+                {entry.subject}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
