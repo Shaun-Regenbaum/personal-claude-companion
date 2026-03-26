@@ -108,6 +108,7 @@ export interface HookInfo {
   event: string
   matcher: string
   command: string
+  source: string
 }
 
 export interface SummaryBlock {

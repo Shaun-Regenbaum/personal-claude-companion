@@ -7,6 +7,7 @@ import { Header } from './components/layout/Header.tsx'
 import { TimelineView } from './components/timeline/TimelineView.tsx'
 import { PlanViewer } from './components/plans/PlanViewer.tsx'
 import { DiffsViewer } from './components/diffs/DiffsViewer.tsx'
+import { ConfigViewer } from './components/config/ConfigViewer.tsx'
 import { extractPlanReferences, extractTasks, getReferencedPlans } from './lib/plan-linker.ts'
 
 function App() {
@@ -133,7 +134,7 @@ function App() {
             />
           )}
           {activeTab === 'config' && (
-            <PlaceholderTab name="Config" />
+            <ConfigViewer />
           )}
           {!selectedSessionId && (
             <div style={{

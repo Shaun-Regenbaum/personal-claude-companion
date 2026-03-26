@@ -29,26 +29,25 @@ function getPlugins() {
   const path = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json')
   try {
     const data = JSON.parse(readFileSync(path, 'utf-8'))
-    if (Array.isArray(data)) {
-      return data.map((p: Record<string, unknown>) => ({
-        name: p.name ?? p.pluginId ?? 'unknown',
-        scope: p.scope ?? 'unknown',
-        version: p.version ?? 'unknown',
-        installedAt: p.installedAt ?? '',
-        lastUpdated: p.lastUpdated ?? '',
-      }))
-    }
-    // Handle object format
-    return Object.entries(data).map(([key, val]) => {
-      const v = val as Record<string, unknown>
-      return {
-        name: key,
-        scope: v.scope ?? 'unknown',
-        version: v.version ?? 'unknown',
-        installedAt: v.installedAt ?? '',
-        lastUpdated: v.lastUpdated ?? '',
+    // Format: { version: 2, plugins: { "name@marketplace": [{ scope, version, ... }] } }
+    const pluginsMap = (data.plugins ?? data) as Record<string, unknown>
+    if (typeof pluginsMap !== 'object') return []
+
+    const result: Array<{ name: string; scope: string; version: string; installedAt: string; lastUpdated: string }> = []
+    for (const [key, val] of Object.entries(pluginsMap)) {
+      if (key === 'version' || !Array.isArray(val)) continue
+      for (const entry of val) {
+        const e = entry as Record<string, unknown>
+        result.push({
+          name: key,
+          scope: (e.scope as string) ?? 'unknown',
+          version: (e.version as string) ?? 'unknown',
+          installedAt: (e.installedAt as string) ?? '',
+          lastUpdated: (e.lastUpdated as string) ?? '',
+        })
       }
-    })
+    }
+    return result
   } catch {
     return []
   }
@@ -84,33 +83,41 @@ function getMcpServers(settings: Record<string, unknown>) {
 }
 
 function getHooks(settings: Record<string, unknown>) {
-  const hooks = (settings.hooks ?? {}) as Record<string, unknown>
-  const result: Array<{ event: string; matcher: string; command: string }> = []
+  const result: Array<{ event: string; matcher: string; command: string; source: string }> = []
+
+  // Parse hooks from settings.json
+  parseHooksObject(settings.hooks as Record<string, unknown> | undefined, 'settings.json', result)
+
+  // Also parse hooks.json
+  const hooksFile = readJsonSafe(join(CLAUDE_DIR, 'hooks.json'))
+  parseHooksObject(hooksFile.hooks as Record<string, unknown> | undefined, 'hooks.json', result)
+
+  return result
+}
+
+function parseHooksObject(
+  hooks: Record<string, unknown> | undefined,
+  source: string,
+  result: Array<{ event: string; matcher: string; command: string; source: string }>,
+) {
+  if (!hooks || typeof hooks !== 'object') return
 
   for (const [event, config] of Object.entries(hooks)) {
     if (Array.isArray(config)) {
-      for (const hook of config) {
-        const h = hook as Record<string, unknown>
-        result.push({
-          event,
-          matcher: (h.matcher as string) ?? '*',
-          command: (h.command as string) ?? JSON.stringify(h),
-        })
-      }
-    } else if (typeof config === 'object' && config !== null) {
-      const c = config as Record<string, unknown>
-      const hookList = (c.hooks ?? []) as Array<Record<string, unknown>>
-      for (const h of hookList) {
-        result.push({
-          event,
-          matcher: (c.matcher as string) ?? '*',
-          command: (h.command as string) ?? JSON.stringify(h),
-        })
+      for (const entry of config) {
+        const e = entry as Record<string, unknown>
+        const matcher = (e.matcher as string) ?? '*'
+        const hookList = (e.hooks ?? []) as Array<Record<string, unknown>>
+        if (hookList.length > 0) {
+          for (const h of hookList) {
+            result.push({ event, matcher, command: (h.command as string) ?? JSON.stringify(h), source })
+          }
+        } else if (e.command) {
+          result.push({ event, matcher, command: e.command as string, source })
+        }
       }
     }
   }
-
-  return result
 }
 
 export default app
