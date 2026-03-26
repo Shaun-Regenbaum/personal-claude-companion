@@ -1,0 +1,9 @@
+{
+  "features": {
+    "skillHealthCheck": true
+  },
+  "teamSkills": {
+    "repoPath": "/Users/shaunie/Documents/Code/shared-skills",
+    "repoUrl": "https://github.com/pzl-io/shared-skills"
+  }
+}

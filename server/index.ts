@@ -26,7 +26,7 @@ app.get('/api/health', (c) => c.json({ ok: true, timestamp: new Date().toISOStri
 // Start file watchers
 startFileWatcher()
 
-const port = 3848
+const port = parseInt(process.env.COMPANION_PORT ?? '3848', 10)
 console.log(`[server] Claude Companion API running on http://localhost:${port}`)
 
 export default {
