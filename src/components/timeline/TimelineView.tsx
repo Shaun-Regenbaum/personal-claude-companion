@@ -4,8 +4,10 @@ import type { PlanReference, TaskEvent } from '../../lib/plan-linker.ts'
 import { TimelineMessage } from './TimelineMessage.tsx'
 import { PlanMarker } from './PlanMarker.tsx'
 import { TaskMarker } from './TaskMarker.tsx'
+import { ActivityBar } from './ActivityBar.tsx'
 
 interface TimelineViewProps {
+  sessionId: string
   messages: ConversationMessage[]
   loading: boolean
   planRefs: PlanReference[]
@@ -14,7 +16,7 @@ interface TimelineViewProps {
   onNavigateToTool?: (toolUseId: string) => void
 }
 
-export function TimelineView({ messages, loading, planRefs, taskEvents, onClickPlan, onNavigateToTool }: TimelineViewProps) {
+export function TimelineView({ sessionId, messages, loading, planRefs, taskEvents, onClickPlan, onNavigateToTool }: TimelineViewProps) {
   const toolResults = useMemo(() => {
     const map = new Map<string, string>()
     for (const msg of messages) {
@@ -89,7 +91,9 @@ export function TimelineView({ messages, loading, planRefs, taskEvents, onClickP
   }
 
   return (
-    <div style={{ padding: '8px 24px 24px' }}>
+    <div>
+      <ActivityBar sessionId={sessionId} />
+      <div style={{ padding: '8px 24px 24px' }}>
       {displayMessages.map((msg) => {
         const planRef = planRefsByUuid.get(msg.uuid)
         const taskEvts = taskEventsByUuid.get(msg.uuid)
@@ -109,6 +113,7 @@ export function TimelineView({ messages, loading, planRefs, taskEvents, onClickP
           </div>
         )
       })}
+      </div>
     </div>
   )
 }

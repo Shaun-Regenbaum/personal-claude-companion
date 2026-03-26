@@ -31,16 +31,21 @@ function App() {
   const sessionPlanNames = useMemo(() => getReferencedPlans(planRefs), [planRefs])
   const { tasks, events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
 
-  // Scroll to bottom only when switching to a new session
+  // Scroll to bottom when messages first load after switching sessions
+  const lastScrolledSession = useRef<string | null>(null)
   useEffect(() => {
-    if (selectedSessionId && scrollRef.current) {
+    if (!selectedSessionId || conversationLoading || messages.length === 0) return
+    if (lastScrolledSession.current === selectedSessionId) return
+    lastScrolledSession.current = selectedSessionId
+    // Double rAF to ensure DOM has painted
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
       })
-    }
-  }, [selectedSessionId])
+    })
+  }, [selectedSessionId, conversationLoading, messages.length])
 
   useSSE({
     'session-update': useCallback(() => {
@@ -112,6 +117,7 @@ function App() {
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
           {activeTab === 'timeline' && selectedSessionId && (
             <TimelineView
+              sessionId={selectedSessionId}
               messages={messages}
               loading={conversationLoading}
               planRefs={planRefs}
@@ -130,8 +136,6 @@ function App() {
             <PlanViewer
               sessionPlanNames={sessionPlanNames}
               initialPlan={focusedPlan}
-              tasks={tasks}
-              sessionId={selectedSessionId}
             />
           )}
           {activeTab === 'config' && (
