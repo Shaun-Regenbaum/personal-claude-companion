@@ -122,6 +122,7 @@ function App() {
               loading={conversationLoading}
               planRefs={planRefs}
               taskEvents={taskEvents}
+              tasks={tasks}
               onClickPlan={handleClickPlan}
               onNavigateToTool={handleNavigateToTool}
             />
