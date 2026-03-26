@@ -145,12 +145,16 @@ function getSkills() {
     return entries.map((name) => {
       const fullPath = join(skillsDir, name)
       let target = fullPath
+      let isSymlink = false
+      let isBroken = false
       try {
         target = readlinkSync(fullPath)
+        isSymlink = true
+        isBroken = !existsSync(target)
       } catch {
         // Not a symlink
       }
-      return { name, path: fullPath, target }
+      return { name, path: fullPath, target, isSymlink, isBroken }
     })
   } catch {
     return []

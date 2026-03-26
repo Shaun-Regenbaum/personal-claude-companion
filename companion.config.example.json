@@ -1,0 +1,9 @@
+{
+  "features": {
+    "skillHealthCheck": true
+  },
+  "teamSkills": {
+    "repoPath": "/path/to/shared-skills",
+    "repoUrl": "https://github.com/your-org/shared-skills"
+  }
+}

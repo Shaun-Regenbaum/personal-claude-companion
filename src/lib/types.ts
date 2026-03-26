@@ -95,6 +95,8 @@ export interface SkillInfo {
   name: string
   path: string
   target: string
+  isSymlink: boolean
+  isBroken: boolean
 }
 
 export interface McpServerInfo {

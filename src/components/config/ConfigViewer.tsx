@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import {
   Server, Puzzle, Zap, Wrench, Shield, Trash2,
-  CheckCircle2, XCircle
+  CheckCircle2, XCircle, Link2, AlertTriangle
 } from 'lucide-react'
 import { useConfig } from '../../hooks/useConfig.ts'
 import { relativeTime } from '../../lib/format.ts'
@@ -242,22 +242,71 @@ function PluginsSection({ plugins, onDelete }: { plugins: PluginInfo[]; onDelete
 function SkillsSection({ skills, onDelete }: { skills: SkillInfo[]; onDelete: (type: string, name: string) => void }) {
   if (skills.length === 0) return <EmptyState text="No skills configured" />
 
+  const healthy = skills.filter((s) => !s.isBroken)
+  const broken = skills.filter((s) => s.isBroken)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {skills.map((skill) => (
+      {broken.length > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '8px 12px',
+          background: '#dc322f10',
+          border: '1px solid #dc322f30',
+          borderRadius: 4,
+          marginBottom: 4,
+        }}>
+          <AlertTriangle size={13} style={{ color: '#dc322f' }} strokeWidth={2} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#dc322f' }}>
+            {broken.length} broken symlink{broken.length > 1 ? 's' : ''}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+            Target repo may not be cloned
+          </span>
+        </div>
+      )}
+
+      {[...broken, ...healthy].map((skill) => (
         <div key={skill.name} style={{
           display: 'flex',
           alignItems: 'center',
           gap: 8,
           padding: '8px 12px',
-          border: '1px solid var(--color-border)',
+          border: `1px solid ${skill.isBroken ? '#dc322f30' : 'var(--color-border)'}`,
           borderRadius: 4,
-          background: 'var(--color-bg-secondary)',
+          background: skill.isBroken ? '#dc322f08' : 'var(--color-bg-secondary)',
+          opacity: skill.isBroken ? 0.8 : 1,
         }}>
-          <Wrench size={13} style={{ color: '#2aa198', flexShrink: 0 }} strokeWidth={2} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+          {skill.isBroken ? (
+            <AlertTriangle size={13} style={{ color: '#dc322f', flexShrink: 0 }} strokeWidth={2} />
+          ) : skill.isSymlink ? (
+            <Link2 size={13} style={{ color: '#2aa198', flexShrink: 0 }} strokeWidth={2} />
+          ) : (
+            <Wrench size={13} style={{ color: '#2aa198', flexShrink: 0 }} strokeWidth={2} />
+          )}
+          <span style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: skill.isBroken ? '#dc322f' : 'var(--color-text-primary)',
+          }}>
             {skill.name}
           </span>
+          {skill.isSymlink && (
+            <span style={{
+              fontSize: 9,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              padding: '2px 6px',
+              borderRadius: 2,
+              background: skill.isBroken ? '#dc322f15' : '#2aa19815',
+              color: skill.isBroken ? '#dc322f' : '#2aa198',
+            }}>
+              {skill.isBroken ? 'Broken' : 'Linked'}
+            </span>
+          )}
           <span style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 10,
