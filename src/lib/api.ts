@@ -80,6 +80,10 @@ export const api = {
       titles: Array<{ sessionId: string; title: string; description: string; generatedAt: string }>
     }>(`/activity/recent-titles?limit=${limit}`),
 
+  generateTurnTitles: (sessionId: string) =>
+    fetch(`${API_BASE}/conversations/${sessionId}/turn-titles`, { method: 'POST' })
+      .then((r) => r.json()) as Promise<{ titles: string[]; cached?: boolean; error?: string }>,
+
   generateTitle: (sessionId: string) =>
     fetch(`${API_BASE}/sessions/${sessionId}/title`, { method: 'POST' })
       .then((r) => r.json()) as Promise<{ title: string; description: string; cached?: boolean; error?: string }>,

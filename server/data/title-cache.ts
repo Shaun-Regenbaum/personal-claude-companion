@@ -3,6 +3,7 @@ import { join } from 'path'
 import { homedir } from 'os'
 
 const CACHE_PATH = join(homedir(), '.claude', 'companion-titles.json')
+const TURN_CACHE_PATH = join(homedir(), '.claude', 'companion-turn-titles.json')
 
 interface TitleEntry {
   title: string
@@ -10,6 +11,8 @@ interface TitleEntry {
   generatedAt: string
   messageCount: number
 }
+
+// --- Session title cache ---
 
 let cache: Map<string, TitleEntry> | null = null
 
@@ -76,4 +79,44 @@ export function getRecentTitles(limit = 5): Array<{ sessionId: string } & TitleE
     .map(([sessionId, entry]) => ({ sessionId, ...entry }))
     .sort((a, b) => b.generatedAt.localeCompare(a.generatedAt))
     .slice(0, limit)
+}
+
+// --- Turn title cache ---
+
+let turnCache: Map<string, string[]> | null = null
+
+function loadTurnCache(): Map<string, string[]> {
+  if (turnCache) return turnCache
+  turnCache = new Map()
+  try {
+    if (existsSync(TURN_CACHE_PATH)) {
+      const data = JSON.parse(readFileSync(TURN_CACHE_PATH, 'utf-8'))
+      for (const [k, v] of Object.entries(data)) {
+        turnCache.set(k, v as string[])
+      }
+    }
+  } catch {
+    turnCache = new Map()
+  }
+  return turnCache
+}
+
+function saveTurnCache(): void {
+  const c = loadTurnCache()
+  const obj: Record<string, string[]> = {}
+  for (const [k, v] of c.entries()) {
+    obj[k] = v
+  }
+  try {
+    writeFileSync(TURN_CACHE_PATH, JSON.stringify(obj, null, 2))
+  } catch {}
+}
+
+export function getCachedTurnTitles(sessionId: string): string[] | null {
+  return loadTurnCache().get(sessionId) ?? null
+}
+
+export function setCachedTurnTitles(sessionId: string, titles: string[]): void {
+  loadTurnCache().set(sessionId, titles)
+  saveTurnCache()
 }

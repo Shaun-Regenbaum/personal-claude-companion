@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ChevronDown, ChevronRight, User, Sparkles, AlertCircle,
   Pencil, FileCode, BookOpen, TerminalSquare, Search,
@@ -7,11 +7,13 @@ import {
 import type { TurnGroup } from '../../lib/timeline-summarizer.ts'
 import { formatTimestamp } from '../../lib/format.ts'
 import { TimelineMessage } from './TimelineMessage.tsx'
+import { api } from '../../lib/api.ts'
 
 interface SummaryViewProps {
   turns: TurnGroup[]
   toolResults: Map<string, string>
   onNavigateToTool?: (toolUseId: string) => void
+  sessionId: string
 }
 
 const TOOL_ICONS: Record<string, { icon: typeof Pencil; color: string }> = {
@@ -25,12 +27,28 @@ const TOOL_ICONS: Record<string, { icon: typeof Pencil; color: string }> = {
   WebSearch: { icon: Globe, color: '#2aa198' },
 }
 
-export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryViewProps) {
-  // Collapse consecutive compactions and empty turns (no prompt, no preview, no tools)
-  const items: Array<{ type: 'turn'; turn: TurnGroup } | { type: 'compacted'; count: number }> = []
+export function SummaryView({ turns, toolResults, onNavigateToTool, sessionId }: SummaryViewProps) {
+  const [turnTitles, setTurnTitles] = useState<string[]>([])
+  const fetchedFor = useRef<string>('')
+
+  // Auto-fetch turn titles
+  useEffect(() => {
+    if (!sessionId || fetchedFor.current === sessionId) return
+    fetchedFor.current = sessionId
+
+    api.generateTurnTitles(sessionId)
+      .then((res) => {
+        if (res.titles?.length) setTurnTitles(res.titles)
+      })
+      .catch(() => {})
+  }, [sessionId, turns.length])
+
+  // Collapse consecutive compactions and empty turns
+  const items: Array<{ type: 'turn'; turn: TurnGroup; turnIdx: number } | { type: 'compacted'; count: number }> = []
   let compactedCount = 0
 
-  for (const turn of turns) {
+  for (let ti = 0; ti < turns.length; ti++) {
+    const turn = turns[ti]
     const isEmpty = turn.isCompaction ||
       (!turn.userPrompt && !turn.assistantPreview && turn.toolSummary.length === 0)
 
@@ -41,7 +59,7 @@ export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryVie
         items.push({ type: 'compacted', count: compactedCount })
         compactedCount = 0
       }
-      items.push({ type: 'turn', turn })
+      items.push({ type: 'turn', turn, turnIdx: ti })
     }
   }
   if (compactedCount > 0) {
@@ -76,6 +94,7 @@ export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryVie
           <TurnRow
             key={item.turn.turnNumber}
             turn={item.turn}
+            aiTitle={turnTitles[item.turnIdx] || ''}
             toolResults={toolResults}
             onNavigateToTool={onNavigateToTool}
           />
@@ -85,8 +104,9 @@ export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryVie
   )
 }
 
-function TurnRow({ turn, toolResults, onNavigateToTool }: {
+function TurnRow({ turn, aiTitle, toolResults, onNavigateToTool }: {
   turn: TurnGroup
+  aiTitle: string
   toolResults: Map<string, string>
   onNavigateToTool?: (toolUseId: string) => void
 }) {
@@ -116,6 +136,13 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
       </div>
     )
   }
+
+  // Use AI title if available, otherwise just show the raw prompt
+  const title = aiTitle || turn.userPrompt || turn.assistantPreview || '...'
+
+  // Show original prompt as subtitle only when AI title replaces it
+  const subtitle = aiTitle && turn.userPrompt && aiTitle !== turn.userPrompt
+    ? turn.userPrompt : null
 
   return (
     <div style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -155,7 +182,7 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
 
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* User prompt */}
+          {/* Title (AI-generated or fallback) */}
           <div style={{
             fontSize: 13,
             fontWeight: 600,
@@ -165,8 +192,25 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
             whiteSpace: 'nowrap',
             lineHeight: 1.4,
           }}>
-            {turn.userPrompt || turn.assistantPreview || (turn.toolSummary.length > 0 ? turn.toolSummary.map(t => t.name).join(', ') : '...')}
+            {title}
           </div>
+
+          {/* Subtitle: original prompt if AI title is shown */}
+          {subtitle && (
+            <div style={{
+              fontSize: 11,
+              color: 'var(--color-text-muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              lineHeight: 1.3,
+              marginTop: 1,
+              fontStyle: 'italic',
+              maxWidth: 400,
+            }}>
+              {subtitle}
+            </div>
+          )}
 
           {/* Assistant preview + tool chips */}
           <div style={{
@@ -176,7 +220,7 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
             marginTop: 3,
             flexWrap: 'wrap',
           }}>
-            {turn.assistantPreview && turn.userPrompt && (
+            {!aiTitle && turn.assistantPreview && turn.userPrompt && (
               <span style={{
                 fontSize: 11,
                 color: 'var(--color-text-muted)',

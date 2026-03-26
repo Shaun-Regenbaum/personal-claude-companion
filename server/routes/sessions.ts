@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { discoverSessions } from '../data/session-discovery.ts'
-import { getCachedTitle, setCachedTitle, getAllCachedTitles } from '../data/title-cache.ts'
+import { getCachedTitle, setCachedTitle, getAllCachedTitles, getCachedTurnTitles, setCachedTurnTitles } from '../data/title-cache.ts'
 import { parseConversation } from '../data/conversation-parser.ts'
 
 // Read lazily so bun --watch picks up .env.local changes
