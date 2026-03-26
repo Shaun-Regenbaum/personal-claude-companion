@@ -11,7 +11,7 @@ function getHighlighter() {
         // Web
         'javascript', 'typescript', 'jsx', 'tsx',
         'html', 'css', 'scss', 'less', 'json', 'jsonc',
-        'vue', 'svelte', 'astro', 'xml', 'svg', 'graphql',
+        'vue', 'svelte', 'astro', 'xml', 'graphql',
         // Systems
         'rust', 'go', 'c', 'cpp', 'zig', 'swift',
         // Scripting
@@ -43,7 +43,7 @@ const LANG_MAP: Record<string, string> = {
   c: 'c', cpp: 'cpp', zig: 'zig', swift: 'swift',
   html: 'html', css: 'css', scss: 'scss', less: 'less',
   json: 'json', jsonc: 'jsonc',
-  xml: 'xml', svg: 'svg', graphql: 'graphql',
+  xml: 'xml', svg: 'xml', graphql: 'graphql',
   vue: 'vue', svelte: 'svelte', astro: 'astro',
   yaml: 'yaml', toml: 'toml', ini: 'ini', properties: 'properties',
   markdown: 'markdown',
@@ -72,16 +72,14 @@ export function useHighlightedCode(code: string, lang: string): string {
     getHighlighter().then((hl) => {
       if (cancelled) return
       try {
-        const shikiLang = LANG_MAP[langRef.current] ?? 'text'
-        const loadedLangs = hl.getLoadedLanguages()
+        const shikiLang = LANG_MAP[langRef.current]
+        if (!shikiLang) return // Unknown language, skip highlighting
 
-        if (loadedLangs.includes(shikiLang as never)) {
-          const result = hl.codeToHtml(codeRef.current, {
-            lang: shikiLang,
-            theme: 'solarized-light',
-          })
-          if (!cancelled) setHtml(result)
-        }
+        const result = hl.codeToHtml(codeRef.current, {
+          lang: shikiLang,
+          theme: 'solarized-light',
+        })
+        if (!cancelled) setHtml(result)
       } catch {
         // Fall back to plain text
       }

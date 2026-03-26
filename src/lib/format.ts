@@ -18,8 +18,8 @@ export function formatTimestamp(iso: string): string {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-export function groupByDay(items: Array<{ lastActivityAt: number }>): Map<string, typeof items> {
-  const groups = new Map<string, typeof items>()
+export function groupByDay<T extends { lastActivityAt: number }>(items: T[]): Map<string, T[]> {
+  const groups = new Map<string, T[]>()
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const yesterday = today - 86_400_000

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { getActivityEvents, getSessionActivitySummary } from '../data/activity-reader.ts'
+import { getRecentTitles } from '../data/title-cache.ts'
 
 const app = new Hono()
 
@@ -14,6 +15,11 @@ app.get('/summary/:sessionId', (c) => {
   const sessionId = c.req.param('sessionId')
   const summary = getSessionActivitySummary(sessionId)
   return c.json(summary)
+})
+
+app.get('/recent-titles', (c) => {
+  const limit = parseInt(c.req.query('limit') ?? '5', 10)
+  return c.json({ titles: getRecentTitles(limit) })
 })
 
 export default app

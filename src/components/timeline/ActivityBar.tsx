@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react'
 import {
-  Circle, Loader, CheckCircle2, RotateCw, Pencil, FileText,
+  RotateCw, Pencil, FileText, Sparkles,
   ChevronDown, ChevronRight
 } from 'lucide-react'
 import { api } from '../../lib/api.ts'
 import { relativeTime } from '../../lib/format.ts'
-import type { TaskInfo } from '../../lib/plan-linker.ts'
+
+interface RecentTitle {
+  sessionId: string
+  title: string
+  description: string
+  generatedAt: string
+}
 
 interface ActivityBarProps {
   sessionId: string
-  tasks: TaskInfo[]
+  children?: React.ReactNode
 }
 
 interface ActivitySummary {
@@ -20,9 +26,10 @@ interface ActivitySummary {
   lastActivity: string | null
 }
 
-export function ActivityBar({ sessionId, tasks }: ActivityBarProps) {
+export function ActivityBar({ sessionId, children }: ActivityBarProps) {
   const [summary, setSummary] = useState<ActivitySummary | null>(null)
-  const [expanded, setExpanded] = useState(true)
+  const [recentTitles, setRecentTitles] = useState<RecentTitle[]>([])
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     const load = () => {
@@ -33,11 +40,12 @@ export function ActivityBar({ sessionId, tasks }: ActivityBarProps) {
     return () => clearInterval(interval)
   }, [sessionId])
 
-  const completed = tasks.filter((t) => t.status === 'completed').length
-  const hasTasks = tasks.length > 0
-  const hasActivity = summary?.lastActivity
+  useEffect(() => {
+    api.getRecentTitles(5).then((res) => setRecentTitles(res.titles)).catch(() => {})
+  }, [sessionId])
 
-  if (!hasTasks && !hasActivity) return null
+  const hasActivity = summary?.lastActivity
+  const hasTitles = recentTitles.length > 0
 
   return (
     <div style={{
@@ -47,111 +55,101 @@ export function ActivityBar({ sessionId, tasks }: ActivityBarProps) {
       borderBottom: '1px solid var(--color-border)',
       background: 'var(--color-bg-secondary)',
     }}>
-      {/* Stats row — always visible */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          padding: '5px 24px',
-          fontSize: 11,
-          fontFamily: 'var(--font-mono)',
-          cursor: hasTasks ? 'pointer' : 'default',
-        }}
-        onClick={() => hasTasks && setExpanded(!expanded)}
-      >
-        {hasTasks && (
-          <span style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
-            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </span>
-        )}
+      {/* Stats row */}
+      {hasActivity && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '5px 24px',
+            fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+            cursor: hasTitles ? 'pointer' : 'default',
+          }}
+          onClick={() => hasTitles && setExpanded(!expanded)}
+        >
+          {hasTitles && (
+            <span style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </span>
+          )}
 
-        {hasTasks && (
-          <Stat
-            icon={<CheckCircle2 size={11} strokeWidth={2} />}
-            value={`${completed}/${tasks.length}`}
-            label="tasks"
-            color={completed === tasks.length ? '#859900' : '#268bd2'}
-          />
-        )}
+          {summary && (
+            <>
+              <Stat icon={<RotateCw size={11} strokeWidth={2} />} value={String(summary.turns)} label="turns" color="var(--color-accent)" />
+              <Stat icon={<Pencil size={11} strokeWidth={2} />} value={String(summary.fileChanges)} label="edits" color="#859900" />
+              {summary.planUpdates > 0 && (
+                <Stat icon={<FileText size={11} strokeWidth={2} />} value={String(summary.planUpdates)} label="plans" color="#6c71c4" />
+              )}
+            </>
+          )}
 
-        {summary && hasActivity && (
-          <>
-            <Stat icon={<RotateCw size={11} strokeWidth={2} />} value={String(summary.turns)} label="turns" color="var(--color-accent)" />
-            <Stat icon={<Pencil size={11} strokeWidth={2} />} value={String(summary.fileChanges)} label="edits" color="#859900" />
-            {summary.planUpdates > 0 && (
-              <Stat icon={<FileText size={11} strokeWidth={2} />} value={String(summary.planUpdates)} label="plans" color="#6c71c4" />
-            )}
-          </>
-        )}
+          {hasTitles && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#6c71c4' }}>
+              <Sparkles size={11} strokeWidth={2} />
+              <span style={{ fontWeight: 600 }}>{recentTitles.length}</span>
+              <span style={{ fontWeight: 500, color: 'var(--color-text-muted)', fontSize: 10, textTransform: 'uppercase' }}>summaries</span>
+            </span>
+          )}
 
-        {summary?.lastActivity && (
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)' }}>
-            {relativeTime(new Date(summary.lastActivity).getTime())}
-          </span>
-        )}
-      </div>
+          {summary?.lastActivity && (
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--color-text-muted)' }}>
+              {relativeTime(new Date(summary.lastActivity).getTime())}
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Task list — expandable */}
-      {hasTasks && expanded && (
+      {/* Recent AI summaries — expandable */}
+      {hasTitles && expanded && (
         <div style={{
           padding: '0 24px 8px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 2,
+          gap: 4,
         }}>
-          {/* Progress bar */}
-          <div style={{
-            height: 2,
-            background: 'var(--color-bg-tertiary)',
-            borderRadius: 1,
-            marginBottom: 4,
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.round((completed / tasks.length) * 100)}%`,
-              background: '#859900',
-              transition: 'width 0.3s ease',
-            }} />
-          </div>
-
-          {tasks.map((task, i) => {
-            const Icon = task.status === 'completed' ? CheckCircle2
-              : task.status === 'in_progress' ? Loader
-              : Circle
-            const color = task.status === 'completed' ? '#859900'
-              : task.status === 'in_progress' ? '#b58900'
-              : 'var(--color-text-muted)'
-
-            return (
-              <div key={task.taskId || i} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 11,
-                fontFamily: 'var(--font-mono)',
-              }}>
-                <Icon size={12} style={{
-                  color,
-                  flexShrink: 0,
-                  ...(task.status === 'in_progress' ? { animation: 'spin 2s linear infinite' } : {}),
-                }} strokeWidth={2} />
+          {recentTitles.map((t) => (
+            <div key={t.sessionId} style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 8,
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+            }}>
+              <Sparkles size={10} style={{ color: '#6c71c4', flexShrink: 0, marginTop: 2 }} strokeWidth={2} />
+              <div style={{ minWidth: 0 }}>
                 <span style={{
-                  fontWeight: 500,
-                  color: task.status === 'completed' ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-                  textDecoration: task.status === 'completed' ? 'line-through' : 'none',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  fontWeight: 600,
+                  color: 'var(--color-text-primary)',
                 }}>
-                  {task.subject}
+                  {t.title}
                 </span>
+                {t.description && (
+                  <span style={{
+                    color: 'var(--color-text-muted)',
+                    marginLeft: 6,
+                  }}>
+                    {t.description}
+                  </span>
+                )}
               </div>
-            )
-          })}
+              <span style={{
+                marginLeft: 'auto',
+                fontSize: 10,
+                color: 'var(--color-text-muted)',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}>
+                {relativeTime(new Date(t.generatedAt).getTime())}
+              </span>
+            </div>
+          ))}
         </div>
       )}
+
+      {/* Children (mode toggle) */}
+      {children}
     </div>
   )
 }

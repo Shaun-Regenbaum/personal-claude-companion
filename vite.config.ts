@@ -10,11 +10,11 @@ export default defineConfig({
       '/api/events': {
         target: 'http://localhost:3848',
         changeOrigin: true,
-        // SSE needs these to prevent buffering
+        // SSE: prevent proxy from buffering the streaming response
+        selfHandleResponse: false,
         configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes) => {
-            proxyRes.headers['cache-control'] = 'no-cache'
-            proxyRes.headers['x-accel-buffering'] = 'no'
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('Accept', 'text/event-stream')
           })
         },
       },

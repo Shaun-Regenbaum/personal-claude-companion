@@ -7,25 +7,43 @@ export function useSSE(handlers: Record<string, SSEHandler>) {
   handlersRef.current = handlers
 
   useEffect(() => {
-    const evtSource = new EventSource('/api/events')
+    let evtSource: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let closed = false
 
-    const eventTypes = ['session-update', 'conversation-update', 'plan-update', 'config-update']
+    function connect() {
+      if (closed) return
+      evtSource = new EventSource('/api/events')
 
-    for (const type of eventTypes) {
-      evtSource.addEventListener(type, (e) => {
-        try {
-          const data = JSON.parse(e.data)
-          handlersRef.current[type]?.(data)
-        } catch {
-          // Skip malformed events
+      const eventTypes = ['session-update', 'conversation-update', 'plan-update', 'config-update']
+
+      for (const type of eventTypes) {
+        evtSource.addEventListener(type, (e) => {
+          try {
+            const data = JSON.parse(e.data)
+            handlersRef.current[type]?.(data)
+          } catch {
+            // Skip malformed events
+          }
+        })
+      }
+
+      evtSource.onerror = () => {
+        evtSource?.close()
+        evtSource = null
+        // Reconnect after 3 seconds
+        if (!closed) {
+          reconnectTimer = setTimeout(connect, 3000)
         }
-      })
+      }
     }
 
-    evtSource.onerror = () => {
-      // EventSource will auto-reconnect
-    }
+    connect()
 
-    return () => evtSource.close()
+    return () => {
+      closed = true
+      evtSource?.close()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+    }
   }, [])
 }

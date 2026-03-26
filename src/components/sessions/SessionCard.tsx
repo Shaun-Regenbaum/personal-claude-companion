@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Terminal, Monitor, Copy, Check } from 'lucide-react'
 import type { Session } from '../../lib/types.ts'
 import { relativeTimeShort, truncate } from '../../lib/format.ts'
+import { api } from '../../lib/api.ts'
 
 interface SessionCardProps {
   session: Session
@@ -11,6 +12,40 @@ interface SessionCardProps {
 
 export function SessionCard({ session, isSelected, onSelect }: SessionCardProps) {
   const [copied, setCopied] = useState(false)
+  const [aiTitle, setAiTitle] = useState(session.aiTitle)
+  const [aiDescription, setAiDescription] = useState(session.aiDescription)
+  const [generating, setGenerating] = useState(false)
+  const attempted = useRef(false)
+
+  // Auto-generate title on first view if not cached
+  useEffect(() => {
+    if (aiTitle || attempted.current || generating) return
+    attempted.current = true
+
+    // Small delay to avoid hammering the worker on initial load
+    const timer = setTimeout(() => {
+      setGenerating(true)
+      api.generateTitle(session.sessionId)
+        .then((res) => {
+          if (res.title && !res.error) {
+            setAiTitle(res.title)
+            setAiDescription(res.description)
+          }
+        })
+        .catch(() => {})
+        .finally(() => setGenerating(false))
+    }, 500 + Math.random() * 2000) // Stagger requests
+
+    return () => clearTimeout(timer)
+  }, [session.sessionId, aiTitle])
+
+  // Sync from server when session prop changes (e.g. after SSE refresh)
+  useEffect(() => {
+    if (session.aiTitle && !aiTitle) {
+      setAiTitle(session.aiTitle)
+      setAiDescription(session.aiDescription)
+    }
+  }, [session.aiTitle])
 
   const copyResumeCommand = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -20,8 +55,8 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
   }
 
   const Icon = session.entrypoint === 'desktop' ? Monitor : Terminal
-  // Color the icon to indicate status — no separate dot needed
   const iconColor = session.isActive ? '#859900' : 'var(--color-text-muted)'
+  const title = aiTitle || session.displayName
 
   return (
     <div
@@ -61,7 +96,7 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
         )}
       </div>
 
-      {/* Name + project */}
+      {/* Name + description */}
       <div style={{ flex: 1, minWidth: 0, opacity: session.isActive ? 1 : 0.7 }}>
         <div style={{
           fontSize: 13,
@@ -72,7 +107,11 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
           whiteSpace: 'nowrap',
           lineHeight: 1.3,
         }}>
-          {truncate(session.displayName, 45)}
+          {generating ? (
+            <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontWeight: 400 }}>generating...</span>
+          ) : (
+            truncate(title, 45)
+          )}
         </div>
         <div style={{
           fontFamily: 'var(--font-mono)',
@@ -80,8 +119,11 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
           fontWeight: 500,
           color: 'var(--color-text-muted)',
           lineHeight: 1.2,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}>
-          {session.projectName}
+          {aiDescription || session.projectName}
         </div>
       </div>
 

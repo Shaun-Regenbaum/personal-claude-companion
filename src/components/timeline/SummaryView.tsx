@@ -26,16 +26,61 @@ const TOOL_ICONS: Record<string, { icon: typeof Pencil; color: string }> = {
 }
 
 export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryViewProps) {
+  // Collapse consecutive compactions and empty turns (no prompt, no preview, no tools)
+  const items: Array<{ type: 'turn'; turn: TurnGroup } | { type: 'compacted'; count: number }> = []
+  let compactedCount = 0
+
+  for (const turn of turns) {
+    const isEmpty = turn.isCompaction ||
+      (!turn.userPrompt && !turn.assistantPreview && turn.toolSummary.length === 0)
+
+    if (isEmpty) {
+      compactedCount++
+    } else {
+      if (compactedCount > 0) {
+        items.push({ type: 'compacted', count: compactedCount })
+        compactedCount = 0
+      }
+      items.push({ type: 'turn', turn })
+    }
+  }
+  if (compactedCount > 0) {
+    items.push({ type: 'compacted', count: compactedCount })
+  }
+
   return (
     <div style={{ padding: '4px 0' }}>
-      {turns.map((turn) => (
-        <TurnRow
-          key={turn.turnNumber}
-          turn={turn}
-          toolResults={toolResults}
-          onNavigateToTool={onNavigateToTool}
-        />
-      ))}
+      {items.map((item, i) => {
+        if (item.type === 'compacted') {
+          return (
+            <div key={`compact-${i}`} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '4px 24px',
+            }}>
+              <div style={{ flex: 1, height: 1, background: '#b5890030' }} />
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: '#b58900',
+                opacity: 0.6,
+              }}>
+                {item.count} compacted
+              </span>
+              <div style={{ flex: 1, height: 1, background: '#b5890030' }} />
+            </div>
+          )
+        }
+        return (
+          <TurnRow
+            key={item.turn.turnNumber}
+            turn={item.turn}
+            toolResults={toolResults}
+            onNavigateToTool={onNavigateToTool}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -120,7 +165,7 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
             whiteSpace: 'nowrap',
             lineHeight: 1.4,
           }}>
-            {turn.userPrompt || '(no text)'}
+            {turn.userPrompt || turn.assistantPreview || (turn.toolSummary.length > 0 ? turn.toolSummary.map(t => t.name).join(', ') : '...')}
           </div>
 
           {/* Assistant preview + tool chips */}
@@ -131,7 +176,7 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
             marginTop: 3,
             flexWrap: 'wrap',
           }}>
-            {turn.assistantPreview && (
+            {turn.assistantPreview && turn.userPrompt && (
               <span style={{
                 fontSize: 11,
                 color: 'var(--color-text-muted)',
@@ -221,9 +266,9 @@ function TurnRow({ turn, toolResults, onNavigateToTool }: {
               }
               return msg.type !== 'progress' && msg.type !== 'agent_progress'
             })
-            .map((msg) => (
+            .map((msg, mi) => (
               <TimelineMessage
-                key={msg.uuid || msg.timestamp}
+                key={msg.uuid || `msg-${mi}`}
                 message={msg}
                 toolResults={toolResults}
                 onNavigateToTool={onNavigateToTool}

@@ -6,7 +6,6 @@ import { groupIntoTurns } from '../../lib/timeline-summarizer.ts'
 import { TimelineMessage } from './TimelineMessage.tsx'
 import { PlanMarker } from './PlanMarker.tsx'
 import { TaskMarker } from './TaskMarker.tsx'
-import { ActivityBar } from './ActivityBar.tsx'
 import { SummaryView } from './SummaryView.tsx'
 
 interface TimelineViewProps {
@@ -103,9 +102,7 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
       transform: 'translateZ(0)',
       willChange: 'transform',
     }}>
-      {/* Activity bar + mode toggle */}
-      <ActivityBar sessionId={sessionId} tasks={tasks} />
-
+      {/* Mode toggle */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -151,11 +148,11 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
         <SummaryView turns={turns} toolResults={toolResults} onNavigateToTool={onNavigateToTool} />
       ) : (
         <div style={{ padding: '8px 24px 24px' }}>
-          {displayMessages.map((msg) => {
+          {displayMessages.map((msg, i) => {
             const planRef = planRefsByUuid.get(msg.uuid)
             const taskEvts = taskEventsByUuid.get(msg.uuid)
             return (
-              <div key={msg.uuid || msg.timestamp}>
+              <div key={msg.uuid || `msg-${i}`}>
                 {planRef && (
                   <PlanMarker
                     planName={planRef.planName}
