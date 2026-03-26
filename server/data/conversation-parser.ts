@@ -6,8 +6,8 @@ interface ParsedConversation {
   total: number
 }
 
-// Cache parsed conversations by path + mtime
-const parseCache = new Map<string, { mtime: number; messages: ConversationMessage[] }>()
+// Cache only ONE conversation at a time to avoid memory bloat
+let parseCache: { path: string; mtime: number; messages: ConversationMessage[] } | null = null
 
 export function parseConversation(
   jsonlPath: string,
@@ -31,9 +31,8 @@ export function parseConversation(
 function getAllMessages(jsonlPath: string): ConversationMessage[] {
   try {
     const stat = statSync(jsonlPath)
-    const cached = parseCache.get(jsonlPath)
-    if (cached && cached.mtime === stat.mtimeMs) {
-      return cached.messages
+    if (parseCache && parseCache.path === jsonlPath && parseCache.mtime === stat.mtimeMs) {
+      return parseCache.messages
     }
 
     const content = readFileSync(jsonlPath, 'utf-8')
@@ -51,7 +50,7 @@ function getAllMessages(jsonlPath: string): ConversationMessage[] {
       }
     }
 
-    parseCache.set(jsonlPath, { mtime: stat.mtimeMs, messages })
+    parseCache = { path: jsonlPath, mtime: stat.mtimeMs, messages }
     return messages
   } catch {
     return []
@@ -155,7 +154,7 @@ function extractContent(
 }
 
 export function invalidateConversationCache(jsonlPath: string): void {
-  parseCache.delete(jsonlPath)
+  if (parseCache?.path === jsonlPath) parseCache = null
 }
 
 export interface FileOperation {

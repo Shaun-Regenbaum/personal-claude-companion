@@ -34,7 +34,7 @@ export function useConversation(sessionId: string | null) {
     load()
 
     if (sessionId) {
-      intervalRef.current = setInterval(load, 3000)
+      intervalRef.current = setInterval(load, 10000)
     }
 
     return () => {

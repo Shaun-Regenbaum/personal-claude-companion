@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, existsSync } from 'fs'
+import { readdirSync, readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'fs'
 import { join, basename } from 'path'
 import { isPidAlive } from './session-state.ts'
 import { findDisplayNameForSession, invalidateHistoryCache } from './history-index.ts'
@@ -202,14 +202,20 @@ function parseSessionHeader(
   let displayName = ''
 
   try {
-    // Read first 50KB to get header info without reading entire file
-    const fd = Bun.file(jsonlPath)
-    const chunk = readFileSync(jsonlPath, { encoding: 'utf-8' })
+    // Read only first 8KB to get header metadata — NOT the whole file
+    const fd = openSync(jsonlPath, 'r')
+    const buf = Buffer.alloc(8192)
+    const bytesRead = readSync(fd, buf, 0, 8192, 0)
+    closeSync(fd)
+    const chunk = buf.toString('utf-8', 0, bytesRead)
     const lines = chunk.split('\n')
+
+    // Estimate total message count from file size (avg ~500 bytes per message)
+    const fileStat = statSync(jsonlPath)
+    messageCount = Math.round(fileStat.size / 500)
 
     for (const line of lines) {
       if (!line.trim()) continue
-      messageCount++
 
       try {
         const entry = JSON.parse(line)
