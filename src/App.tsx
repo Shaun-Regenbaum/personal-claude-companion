@@ -131,6 +131,7 @@ function App() {
               sessionPlanNames={sessionPlanNames}
               initialPlan={focusedPlan}
               tasks={tasks}
+              sessionId={selectedSessionId}
             />
           )}
           {activeTab === 'config' && (

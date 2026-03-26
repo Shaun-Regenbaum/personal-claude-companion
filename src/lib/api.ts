@@ -66,6 +66,15 @@ export const api = {
       graph: string
     }>(`/git/${sessionId}/log?limit=${limit}`),
 
+  getActivitySummary: (sessionId: string) =>
+    fetchJson<{
+      turns: number
+      fileChanges: number
+      tasksDone: number
+      planUpdates: number
+      lastActivity: string | null
+    }>(`/activity/summary/${sessionId}`),
+
   deleteSkill: (name: string) =>
     fetch(`${API_BASE}/config/skills/${name}`, { method: 'DELETE' }).then((r) => r.json()),
 

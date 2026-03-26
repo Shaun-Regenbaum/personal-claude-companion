@@ -7,6 +7,7 @@ import events from './routes/events.ts'
 import plans from './routes/plans.ts'
 import config from './routes/config.ts'
 import git from './routes/git.ts'
+import activity from './routes/activity.ts'
 import { startFileWatcher } from './watch/file-watcher.ts'
 
 const app = new Hono()
@@ -20,6 +21,7 @@ app.route('/api/events', events)
 app.route('/api/plans', plans)
 app.route('/api/config', config)
 app.route('/api/git', git)
+app.route('/api/activity', activity)
 
 app.get('/api/health', (c) => c.json({ ok: true, timestamp: new Date().toISOString() }))
 

@@ -46,15 +46,70 @@ export function generateDiff(filePath: string, oldStr: string, newStr: string): 
  * Guess language from file extension for display purposes.
  */
 export function getLanguage(filePath: string): string {
+  // Handle special filenames first
+  const basename = filePath.split('/').pop()?.toLowerCase() ?? ''
+  const basenameMap: Record<string, string> = {
+    dockerfile: 'dockerfile',
+    makefile: 'makefile',
+    cmakelists: 'cmake',
+    '.gitignore': 'shell',
+    '.env': 'shell',
+    '.env.local': 'shell',
+    '.env.example': 'shell',
+    '.editorconfig': 'ini',
+    '.prettierrc': 'json',
+    '.eslintrc': 'json',
+    'tsconfig.json': 'jsonc',
+    'jsconfig.json': 'jsonc',
+  }
+  if (basenameMap[basename]) return basenameMap[basename]
+
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-    py: 'python', rs: 'rust', go: 'go', rb: 'ruby', java: 'java',
-    css: 'css', html: 'html', json: 'json', yaml: 'yaml', yml: 'yaml',
-    md: 'markdown', sh: 'shell', bash: 'shell', zsh: 'shell',
-    sql: 'sql', toml: 'toml', lua: 'lua', zig: 'zig', c: 'c', h: 'c',
-    cpp: 'cpp', hpp: 'cpp', swift: 'swift', kt: 'kotlin',
-    csv: 'csv', xml: 'xml', svg: 'xml',
+    // Web
+    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+    mjs: 'javascript', mts: 'typescript', cjs: 'javascript', cts: 'typescript',
+    css: 'css', scss: 'scss', less: 'less',
+    html: 'html', htm: 'html',
+    vue: 'vue', svelte: 'svelte', astro: 'astro',
+    json: 'json', jsonc: 'jsonc', jsonl: 'json',
+    gql: 'graphql', graphql: 'graphql',
+    // Systems
+    rs: 'rust', go: 'go', c: 'c', h: 'c',
+    cpp: 'cpp', hpp: 'cpp', cc: 'cpp', cxx: 'cpp',
+    zig: 'zig', swift: 'swift',
+    // Scripting
+    py: 'python', pyi: 'python', pyx: 'python',
+    rb: 'ruby', lua: 'lua',
+    r: 'r', R: 'r', jl: 'julia',
+    sh: 'shell', bash: 'shell', zsh: 'shell', fish: 'shell',
+    ps1: 'powershell',
+    pl: 'perl', pm: 'perl', php: 'php',
+    // JVM
+    java: 'java', kt: 'kotlin', kts: 'kotlin',
+    scala: 'scala', groovy: 'groovy', gradle: 'groovy',
+    // Functional
+    ex: 'elixir', exs: 'elixir', erl: 'erlang',
+    hs: 'haskell', ml: 'ocaml', mli: 'ocaml',
+    dart: 'dart',
+    // Data/Config
+    yaml: 'yaml', yml: 'yaml',
+    toml: 'toml', ini: 'ini', cfg: 'ini',
+    properties: 'properties',
+    sql: 'sql', csv: 'csv',
+    xml: 'xml', svg: 'svg', xsl: 'xml',
+    md: 'markdown', mdx: 'markdown',
+    // Infra
+    tf: 'hcl', hcl: 'hcl',
+    proto: 'proto',
+    nginx: 'nginx', conf: 'nginx',
+    cmake: 'cmake',
+    // Other
+    diff: 'diff', patch: 'diff',
+    lock: 'json',
+    env: 'shell',
+    gitignore: 'shell',
+    editorconfig: 'ini',
   }
   return map[ext] ?? 'text'
 }

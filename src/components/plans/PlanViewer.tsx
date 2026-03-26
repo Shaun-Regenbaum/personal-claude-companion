@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import { usePlans, usePlanContent } from '../../hooks/usePlans.ts'
 import { relativeTime } from '../../lib/format.ts'
 import { TaskProgress } from './TaskProgress.tsx'
+import { ActivityFeed } from './ActivityFeed.tsx'
 import type { PlanSummary } from '../../lib/types.ts'
 import type { TaskInfo } from '../../lib/plan-linker.ts'
 
@@ -11,9 +12,10 @@ interface PlanViewerProps {
   sessionPlanNames: string[]
   initialPlan?: string | null
   tasks: TaskInfo[]
+  sessionId?: string | null
 }
 
-export function PlanViewer({ sessionPlanNames, initialPlan, tasks }: PlanViewerProps) {
+export function PlanViewer({ sessionPlanNames, initialPlan, tasks, sessionId }: PlanViewerProps) {
   const { plans, loading: plansLoading } = usePlans()
   const [selectedPlan, setSelectedPlan] = useState<string | null>(initialPlan ?? null)
   const { content, loading: contentLoading } = usePlanContent(selectedPlan)
@@ -42,6 +44,9 @@ export function PlanViewer({ sessionPlanNames, initialPlan, tasks }: PlanViewerP
         overflowY: 'auto',
       }}>
         {/* Task progress (if session has tasks) */}
+        {/* Live activity from hooks */}
+        <ActivityFeed sessionId={sessionId ?? null} />
+
         {tasks.length > 0 && <TaskProgress tasks={tasks} />}
 
         <div className="pzl-card-title" style={{ padding: '12px 12px 8px' }}>

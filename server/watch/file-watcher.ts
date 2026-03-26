@@ -3,6 +3,7 @@ import { join } from 'path'
 import { emit } from './event-bus.ts'
 import { invalidateSessionCache } from '../data/session-discovery.ts'
 import { invalidateConversationCache } from '../data/conversation-parser.ts'
+import { invalidateActivityCache } from '../data/activity-reader.ts'
 
 const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
 
@@ -86,6 +87,19 @@ export function startFileWatcher(): void {
     debounced('config', () => {
       emit({ type: 'config-update', timestamp: new Date().toISOString() })
     })
+  })
+
+  // Watch companion activity log
+  const activityPath = join(CLAUDE_DIR, 'companion-activity.jsonl')
+  const activityWatcher = watch(activityPath, {
+    ignoreInitial: true,
+  })
+
+  activityWatcher.on('change', () => {
+    debounced('activity', () => {
+      invalidateActivityCache()
+      emit({ type: 'activity-update', timestamp: new Date().toISOString() })
+    }, 300)
   })
 
   console.log('[watcher] File watchers started')
