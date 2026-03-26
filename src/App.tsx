@@ -113,7 +113,13 @@ function App() {
           onTabChange={setActiveTab}
         />
 
-        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
+        <div ref={scrollRef} style={{
+          flex: 1,
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          transform: 'translateZ(0)',
+          willChange: 'scroll-position',
+        }}>
           {activeTab === 'timeline' && selectedSessionId && (
             <TimelineView
               sessionId={selectedSessionId}

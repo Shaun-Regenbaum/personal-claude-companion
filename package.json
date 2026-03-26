@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.23",
     "chokidar": "^5.0.0",
     "diff": "^8.0.4",
     "hono": "^4.12.9",
