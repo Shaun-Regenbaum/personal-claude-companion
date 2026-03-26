@@ -230,6 +230,24 @@ body {
   background: var(--color-border);
 }
 
+/* ── Shiki Code Highlighting ── */
+
+.shiki-container pre {
+  margin: 0;
+  padding: 12px;
+  background: transparent !important;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.shiki-container code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* ── Plan Markdown ── */
 
 .plan-markdown {

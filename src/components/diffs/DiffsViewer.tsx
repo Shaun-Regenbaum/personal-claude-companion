@@ -3,6 +3,8 @@ import {
   Pencil, FileCode, BookOpen, TerminalSquare, GitCommit,
   ChevronDown, ChevronRight
 } from 'lucide-react'
+import { useHighlightedCode } from '../../hooks/useHighlighter.ts'
+import { GitGraph } from './GitGraph.tsx'
 import type { FileOperation, CommitInfo } from '../../lib/types.ts'
 import { useOperations } from '../../hooks/useOperations.ts'
 import { formatTimestamp } from '../../lib/format.ts'
@@ -23,70 +25,53 @@ export function DiffsViewer({ sessionId, initialToolUseId }: DiffsViewerProps) {
   const { operations, commits, loading } = useOperations(sessionId)
   const [selectedId, setSelectedId] = useState<string | null>(initialToolUseId ?? null)
 
-  // Group operations by commits
+  // Group operations by commits, reverse chronological, uncommitted at top
   const groups = useMemo(() => {
+    if (operations.length === 0) return []
+
     const result: OperationGroup[] = []
-    const commitsByTimestamp = new Map<string, CommitInfo>()
-    for (const c of commits) commitsByTimestamp.set(c.timestamp, c)
+    const sortedCommits = [...commits].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )
 
-    // Find commit boundaries
-    const commitTimes = commits.map((c) => new Date(c.timestamp).getTime()).sort((a, b) => a - b)
+    // Assign each operation to the next commit that follows it, or "uncommitted"
+    const commitTimes = sortedCommits.map((c) => ({
+      commit: c,
+      time: new Date(c.timestamp).getTime(),
+    }))
 
-    let currentGroup: FileOperation[] = []
-    let lastCommitIdx = -1
+    // Bucket operations: for each commit, collect ops that happened before it
+    // but after the previous commit
+    const uncommitted: FileOperation[] = []
+    const commitBuckets = new Map<string, FileOperation[]>()
+    for (const c of sortedCommits) commitBuckets.set(c.hash, [])
 
     for (const op of operations) {
       const opTime = new Date(op.timestamp).getTime()
-
-      // Check if a commit happened after this operation
-      const nextCommitIdx = commitTimes.findIndex((ct, i) => i > lastCommitIdx && ct >= opTime)
-
-      if (nextCommitIdx !== -1 && nextCommitIdx !== lastCommitIdx) {
-        // Check if this commit's time matches
-        const commitTime = commitTimes[nextCommitIdx]
-        if (commitTime <= opTime + 60000) {
-          // Same group
-          currentGroup.push(op)
-          continue
+      // Find the earliest commit that comes after this operation
+      let assigned = false
+      for (let i = commitTimes.length - 1; i >= 0; i--) {
+        if (opTime <= commitTimes[i].time) {
+          commitBuckets.get(commitTimes[i].commit.hash)!.push(op)
+          assigned = true
+          break
         }
       }
-
-      currentGroup.push(op)
+      if (!assigned) {
+        uncommitted.push(op)
+      }
     }
 
-    // Simple grouping: put edits before each commit together
-    if (commits.length === 0) {
-      result.push({ type: 'ungrouped', operations })
-    } else {
-      let ops: FileOperation[] = []
-      let commitIdx = 0
+    // Uncommitted first
+    if (uncommitted.length > 0) {
+      result.push({ type: 'ungrouped', operations: uncommitted })
+    }
 
-      for (const op of operations) {
-        const opTime = new Date(op.timestamp).getTime()
-
-        // If there's a commit and we've passed it, close the group
-        while (commitIdx < commits.length) {
-          const commitTime = new Date(commits[commitIdx].timestamp).getTime()
-          if (opTime > commitTime) {
-            if (ops.length > 0) {
-              result.push({ type: 'commit', commit: commits[commitIdx], operations: ops })
-              ops = []
-            }
-            commitIdx++
-          } else {
-            break
-          }
-        }
-        ops.push(op)
-      }
-
-      // Remaining ops
+    // Then commits in reverse chronological order
+    for (const c of sortedCommits) {
+      const ops = commitBuckets.get(c.hash)!
       if (ops.length > 0) {
-        if (commitIdx < commits.length) {
-          result.push({ type: 'commit', commit: commits[commitIdx], operations: ops })
-        } else {
-          result.push({ type: 'ungrouped', operations: ops })
-        }
+        result.push({ type: 'commit', commit: c, operations: ops })
       }
     }
 
@@ -118,6 +103,9 @@ export function DiffsViewer({ sessionId, initialToolUseId }: DiffsViewerProps) {
         borderRight: '1px solid var(--color-border)',
         overflowY: 'auto',
       }}>
+        {/* Git graph */}
+        <GitGraph sessionId={sessionId} />
+
         <div className="pzl-card-title" style={{ padding: '12px 12px 8px' }}>
           File Operations
         </div>
@@ -157,26 +145,28 @@ function OperationGroupView({ group, selectedId, onSelect }: {
 
   return (
     <div style={{ marginBottom: 4 }}>
-      {/* Commit header */}
-      {group.commit && (
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            background: 'var(--color-bg-tertiary)',
-            border: 'none',
-            borderBottom: '1px solid var(--color-border)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            textAlign: 'left',
-          }}
-        >
-          <GitCommit size={12} style={{ color: '#dc322f', flexShrink: 0 }} strokeWidth={2} />
-          {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+      {/* Group header */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '6px 12px',
+          background: 'var(--color-bg-tertiary)',
+          border: 'none',
+          borderBottom: '1px solid var(--color-border)',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          textAlign: 'left',
+        }}
+      >
+        <GitCommit size={12} style={{
+          color: group.commit ? '#dc322f' : '#b58900',
+          flexShrink: 0,
+        }} strokeWidth={2} />
+        {collapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
           <span style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
@@ -187,10 +177,19 @@ function OperationGroupView({ group, selectedId, onSelect }: {
             whiteSpace: 'nowrap',
             flex: 1,
           }}>
-            {group.commit.message || group.commit.hash.slice(0, 7)}
+            {group.commit
+              ? (group.commit.message || group.commit.hash.slice(0, 7))
+              : 'Uncommitted'}
+          </span>
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--color-text-muted)',
+            flexShrink: 0,
+          }}>
+            {fileOps.length}
           </span>
         </button>
-      )}
 
       {!collapsed && fileOps.map((op) => (
         <OperationRow
@@ -314,17 +313,12 @@ function OperationDetail({ op }: { op: FileOperation }) {
 
       {/* Content */}
       <div style={{ padding: '0 20px' }}>
-        {op.toolName === 'Edit' && op.oldString != null && op.newString != null && (
+        {op.toolName === 'Edit' && op.oldString != null && op.newString != null ? (
           <DiffView filePath={op.filePath} oldStr={op.oldString} newStr={op.newString} />
-        )}
-        {op.toolName === 'Write' && op.content != null && (
-          <CodeView content={op.content} lang={lang} />
-        )}
-        {op.toolName === 'Read' && op.readContent != null && (
-          <CodeView content={op.readContent} lang={lang} />
-        )}
-        {op.toolName === 'Bash' && (
+        ) : op.toolName === 'Bash' ? (
           <BashView command={op.command ?? ''} output={op.output ?? ''} />
+        ) : (
+          <CodeView content={op.content ?? op.readContent ?? ''} lang={lang} />
         )}
       </div>
     </div>
@@ -413,8 +407,54 @@ function DiffView({ filePath, oldStr, newStr }: { filePath: string; oldStr: stri
 }
 
 function CodeView({ content, lang }: { content: string; lang: string }) {
+  const html = useHighlightedCode(content, lang)
   const lines = content.split('\n')
 
+  // If shiki produced highlighted HTML, render it with line numbers
+  if (html) {
+    return (
+      <div style={{
+        marginTop: 12,
+        border: '1px solid var(--color-border)',
+        borderRadius: 4,
+        overflow: 'auto',
+        maxHeight: '70vh',
+        display: 'flex',
+      }}>
+        {/* Line numbers gutter */}
+        <div style={{
+          flexShrink: 0,
+          borderRight: '1px solid var(--color-border)',
+          background: 'var(--color-bg-secondary)',
+          padding: '12px 0',
+          userSelect: 'none',
+          textAlign: 'right',
+        }}>
+          {lines.map((_, i) => (
+            <div key={i} style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 12,
+              lineHeight: 1.6,
+              paddingRight: 8,
+              paddingLeft: 8,
+              color: 'var(--color-text-muted)',
+              minWidth: 36,
+            }}>
+              {i + 1}
+            </div>
+          ))}
+        </div>
+        {/* Highlighted code */}
+        <div
+          className="shiki-container"
+          style={{ flex: 1, overflow: 'auto' }}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    )
+  }
+
+  // Fallback: plain monospace
   return (
     <div style={{
       fontFamily: 'var(--font-mono)',
@@ -457,7 +497,14 @@ function CodeView({ content, lang }: { content: string; lang: string }) {
   )
 }
 
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[[\d;]*m/g, '')
+}
+
 function BashView({ command, output }: { command: string; output: string }) {
+  const cleanOutput = stripAnsi(output)
+  const lines = cleanOutput.split('\n')
+
   return (
     <div style={{ marginTop: 12 }}>
       {/* Command */}
@@ -475,25 +522,50 @@ function BashView({ command, output }: { command: string; output: string }) {
       }}>
         $ {command}
       </div>
-      {/* Output */}
-      {output && (
+      {/* Output with line numbers */}
+      {cleanOutput && (
         <div style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 12,
-          fontWeight: 500,
-          padding: '8px 12px',
-          background: 'var(--color-bg-secondary)',
           border: '1px solid var(--color-border)',
           borderTop: 'none',
           borderRadius: '0 0 4px 4px',
-          color: 'var(--color-text-secondary)',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-all',
           maxHeight: '60vh',
           overflow: 'auto',
-          lineHeight: 1.5,
         }}>
-          {output}
+          {lines.map((line, i) => (
+            <div key={i} style={{ display: 'flex', minHeight: 19 }}>
+              <span style={{
+                width: 36,
+                flexShrink: 0,
+                textAlign: 'right',
+                paddingRight: 8,
+                color: 'var(--color-text-muted)',
+                fontSize: 10,
+                userSelect: 'none',
+                borderRight: '1px solid var(--color-border)',
+                background: 'var(--color-bg-secondary)',
+                lineHeight: 1.6,
+              }}>
+                {i + 1}
+              </span>
+              <span style={{
+                flex: 1,
+                paddingLeft: 10,
+                paddingRight: 12,
+                color: line.startsWith('error') || line.startsWith('Error') ? '#dc322f'
+                  : line.startsWith('warning') || line.startsWith('Warning') ? '#b58900'
+                  : line.startsWith('+') ? '#859900'
+                  : line.startsWith('-') ? '#dc322f'
+                  : 'var(--color-text-secondary)',
+                fontWeight: 500,
+                whiteSpace: 'pre',
+                lineHeight: 1.6,
+              }}>
+                {line}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>

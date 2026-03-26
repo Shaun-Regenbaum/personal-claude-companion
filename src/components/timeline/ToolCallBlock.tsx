@@ -34,12 +34,13 @@ export function ToolCallBlock({ name, toolUseId, input, result, onNavigate }: To
   const style = TOOL_STYLES[name] ?? DEFAULT_STYLE
   const Icon = style.icon
   const summary = getToolSummary(name, input)
+  const canNavigate = onNavigate && toolUseId && ['Edit', 'Write', 'Read', 'Bash'].includes(name)
 
   return (
     <div style={{ borderLeft: `2px solid ${style.color}30` }}>
       {/* Compact single-line row */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => canNavigate ? onNavigate(toolUseId) : setExpanded(!expanded)}
         style={{
           width: '100%',
           display: 'flex',
@@ -87,22 +88,6 @@ export function ToolCallBlock({ name, toolUseId, input, result, onNavigate }: To
             flexShrink: 0,
           }}>
             {getEditStats(name, input)}
-          </span>
-        )}
-        {onNavigate && toolUseId && ['Edit', 'Write', 'Read', 'Bash'].includes(name) && (
-          <span
-            onClick={(e) => { e.stopPropagation(); onNavigate(toolUseId) }}
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10,
-              fontWeight: 600,
-              color: 'var(--color-accent)',
-              flexShrink: 0,
-              cursor: 'pointer',
-              padding: '1px 4px',
-            }}
-          >
-            VIEW
           </span>
         )}
       </button>

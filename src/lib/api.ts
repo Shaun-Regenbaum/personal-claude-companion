@@ -51,4 +51,18 @@ export const api = {
 
   getConfig: () =>
     fetchJson<import('./types.ts').ConfigData>('/config'),
+
+  getGitLog: (sessionId: string, limit = 8) =>
+    fetchJson<{
+      entries: Array<{
+        hash: string
+        shortHash: string
+        message: string
+        author: string
+        date: string
+        refs: string
+        graph: string
+      }>
+      graph: string
+    }>(`/git/${sessionId}/log?limit=${limit}`),
 }
