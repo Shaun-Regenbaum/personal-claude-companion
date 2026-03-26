@@ -5,11 +5,14 @@ import { useSSE } from './hooks/useSSE.ts'
 import { SessionList } from './components/sessions/SessionList.tsx'
 import { Header } from './components/layout/Header.tsx'
 import { TimelineView } from './components/timeline/TimelineView.tsx'
+import { PlanViewer } from './components/plans/PlanViewer.tsx'
+import { extractPlanReferences, extractTasks, getReferencedPlans } from './lib/plan-linker.ts'
 
 function App() {
   const { sessions, loading: sessionsLoading, refresh: refreshSessions } = useSessions()
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('timeline')
+  const [focusedPlan, setFocusedPlan] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const { messages, loading: conversationLoading, refresh: refreshConversation } =
@@ -20,17 +23,21 @@ function App() {
     [sessions, selectedSessionId]
   )
 
-  // Scroll to bottom when switching sessions
+  // Extract plan references and tasks from current conversation
+  const planRefs = useMemo(() => extractPlanReferences(messages), [messages])
+  const sessionPlanNames = useMemo(() => getReferencedPlans(planRefs), [planRefs])
+  const { tasks, events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
+
+  // Scroll to bottom only when switching to a new session
   useEffect(() => {
     if (selectedSessionId && scrollRef.current) {
-      // Wait for render, then scroll
       requestAnimationFrame(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
       })
     }
-  }, [selectedSessionId, messages.length])
+  }, [selectedSessionId])
 
   useSSE({
     'session-update': useCallback(() => {
@@ -50,6 +57,13 @@ function App() {
   const handleSelectSession = useCallback((sessionId: string) => {
     setSelectedSessionId(sessionId)
     setActiveTab('timeline')
+    setFocusedPlan(null)
+  }, [])
+
+  // Navigate from timeline plan marker to plans tab
+  const handleClickPlan = useCallback((planName: string) => {
+    setFocusedPlan(planName)
+    setActiveTab('plans')
   }, [])
 
   return (
@@ -88,13 +102,23 @@ function App() {
 
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
           {activeTab === 'timeline' && selectedSessionId && (
-            <TimelineView messages={messages} loading={conversationLoading} />
+            <TimelineView
+              messages={messages}
+              loading={conversationLoading}
+              planRefs={planRefs}
+              taskEvents={taskEvents}
+              onClickPlan={handleClickPlan}
+            />
           )}
           {activeTab === 'diffs' && selectedSessionId && (
             <PlaceholderTab name="Diffs" />
           )}
           {activeTab === 'plans' && (
-            <PlaceholderTab name="Plans" />
+            <PlanViewer
+              sessionPlanNames={sessionPlanNames}
+              initialPlan={focusedPlan}
+              tasks={tasks}
+            />
           )}
           {activeTab === 'config' && (
             <PlaceholderTab name="Config" />
