@@ -32,10 +32,14 @@ export default {
         return Response.json({ error: 'turns required' }, { status: 400, headers: CORS })
       }
 
-      // Build the full context for the model
-      const turnLines = body.turns.map((t, i) =>
-        `--- Turn ${i + 1} ---\nUser: ${t.prompt}\nAssistant: ${t.response}\nTools: ${t.tools}`
-      ).join('\n\n')
+      // Take the last 25 turns to stay within model context/output limits
+      const MAX_TURNS = 25
+      const recentTurns = body.turns.slice(-MAX_TURNS)
+      const skipped = body.turns.length - recentTurns.length
+
+      const turnLines = recentTurns.map((t, i) =>
+        `${i + 1}. [${t.tools}] ${t.prompt.slice(0, 300)}`
+      ).join('\n')
 
       const result = await env.AI.run(MODEL, {
         messages: [
@@ -46,15 +50,15 @@ export default {
 Return a JSON object with:
 1. "title" - casual 3-6 word title for the overall session (what was the main thing worked on)
 2. "description" - one casual sentence about what was accomplished
-3. "turnTitles" - an array with one short casual title (3-7 words) per turn, describing what happened in that turn. Be specific about the actual work, not generic.
+3. "turnTitles" - array of short titles (2-5 words each), one per turn
 
-Style: casual, like telling a friend what you did. Examples: "Debugging the SSE connection", "Setting up the worker", "Fixing that auth bug".
+Be casual and specific. Examples: "Fixing auth bug", "Setting up worker", "Debugging SSE".
 
-Reply ONLY with valid JSON, no other text.`,
+Reply ONLY with valid JSON.`,
           },
           { role: 'user', content: turnLines },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
       })
 
       const raw = result as Record<string, unknown>
@@ -67,12 +71,15 @@ Reply ONLY with valid JSON, no other text.`,
       }
 
       const parsed = JSON.parse(jsonMatch[0])
+      const recentTitles = Array.isArray(parsed.turnTitles)
+        ? parsed.turnTitles.map((t: unknown) => String(t ?? '').slice(0, 80))
+        : []
+      // Prepend empty strings for older turns we didn't summarize
+      const allTitles = [...Array(skipped).fill(''), ...recentTitles]
       return Response.json({
         title: String(parsed.title ?? '').slice(0, 80),
         description: String(parsed.description ?? '').slice(0, 150),
-        turnTitles: Array.isArray(parsed.turnTitles)
-          ? parsed.turnTitles.map((t: unknown) => String(t ?? '').slice(0, 80))
-          : [],
+        turnTitles: allTitles,
       }, { headers: CORS })
     } catch (e) {
       return Response.json(
