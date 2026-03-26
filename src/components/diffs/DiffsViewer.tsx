@@ -318,7 +318,7 @@ function OperationDetail({ op }: { op: FileOperation }) {
         ) : op.toolName === 'Bash' ? (
           <BashView command={op.command ?? ''} output={op.output ?? ''} />
         ) : (
-          <CodeView content={op.content ?? op.readContent ?? ''} lang={lang} />
+          <CodeView content={stripReadLineNumbers(op.content ?? op.readContent ?? '')} lang={lang} />
         )}
       </div>
     </div>
@@ -495,6 +495,22 @@ function CodeView({ content, lang }: { content: string; lang: string }) {
       ))}
     </div>
   )
+}
+
+/**
+ * Strip `cat -n` style line number prefixes from Read tool output.
+ * Format: `  <spaces><number>→<content>` or `<spaces><number>\t<content>`
+ */
+function stripReadLineNumbers(text: string): string {
+  const lines = text.split('\n')
+  // Check if most lines match the pattern
+  const prefixPattern = /^\s*\d+[→\t]/
+  const matchCount = lines.filter((l) => prefixPattern.test(l)).length
+  if (matchCount < lines.length * 0.5) return text // Not line-numbered content
+
+  return lines.map((line) => {
+    return line.replace(/^\s*\d+[→\t]\s?/, '')
+  }).join('\n')
 }
 
 function stripAnsi(text: string): string {
