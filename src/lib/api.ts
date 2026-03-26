@@ -75,18 +75,12 @@ export const api = {
       lastActivity: string | null
     }>(`/activity/summary/${sessionId}`),
 
-  getRecentTitles: (limit = 5) =>
-    fetchJson<{
-      titles: Array<{ sessionId: string; title: string; description: string; generatedAt: string }>
-    }>(`/activity/recent-titles?limit=${limit}`),
-
-  generateTurnTitles: (sessionId: string) =>
-    fetch(`${API_BASE}/conversations/${sessionId}/turn-titles`, { method: 'POST' })
-      .then((r) => r.json()) as Promise<{ titles: string[]; cached?: boolean; error?: string }>,
-
-  generateTitle: (sessionId: string) =>
-    fetch(`${API_BASE}/sessions/${sessionId}/title`, { method: 'POST' })
-      .then((r) => r.json()) as Promise<{ title: string; description: string; cached?: boolean; error?: string }>,
+  summarizeSession: (sessionId: string) =>
+    fetch(`${API_BASE}/sessions/${sessionId}/summarize`, { method: 'POST' })
+      .then((r) => r.json()) as Promise<{
+        title: string; description: string; turnTitles: string[];
+        generatedAt?: string; error?: string
+      }>,
 
   deleteSkill: (name: string) =>
     fetch(`${API_BASE}/config/skills/${name}`, { method: 'DELETE' }).then((r) => r.json()),

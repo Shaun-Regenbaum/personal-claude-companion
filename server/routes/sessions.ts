@@ -1,10 +1,10 @@
 import { Hono } from 'hono'
 import { discoverSessions } from '../data/session-discovery.ts'
-import { getCachedTitle, setCachedTitle, getAllCachedTitles, getCachedTurnTitles, setCachedTurnTitles } from '../data/title-cache.ts'
+import { getCached, setCached } from '../data/title-cache.ts'
 import { parseConversation } from '../data/conversation-parser.ts'
+import { groupIntoTurns } from '../../src/lib/timeline-summarizer.ts'
 
-// Read lazily so bun --watch picks up .env.local changes
-function getTitleWorkerUrl(): string {
+function getWorkerUrl(): string {
   return process.env.TITLE_WORKER_URL ?? ''
 }
 
@@ -17,20 +17,13 @@ app.get('/', async (c) => {
 
   let sessions = await discoverSessions()
 
-  if (status === 'active') {
-    sessions = sessions.filter((s) => s.isActive)
-  } else if (status === 'inactive') {
-    sessions = sessions.filter((s) => !s.isActive)
-  }
+  if (status === 'active') sessions = sessions.filter((s) => s.isActive)
+  else if (status === 'inactive') sessions = sessions.filter((s) => !s.isActive)
 
-  // Attach cached AI titles to session responses
-  const titles = getAllCachedTitles()
   const total = sessions.length
   const paginated = sessions.slice(offset, offset + limit).map((s) => {
-    const cached = titles[s.sessionId]
-    return cached
-      ? { ...s, aiTitle: cached.title, aiDescription: cached.description }
-      : s
+    const cached = getCached(s.sessionId)
+    return cached ? { ...s, aiTitle: cached.title, aiDescription: cached.description } : s
   })
 
   return c.json({ sessions: paginated, total })
@@ -40,91 +33,94 @@ app.get('/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId')
   const sessions = await discoverSessions()
   const session = sessions.find((s) => s.sessionId === sessionId)
+  if (!session) return c.json({ error: 'Session not found' }, 404)
 
-  if (!session) {
-    return c.json({ error: 'Session not found' }, 404)
-  }
-
-  const cached = getCachedTitle(sessionId)
-  const result = cached
-    ? { ...session, aiTitle: cached.title, aiDescription: cached.description }
-    : session
-
-  return c.json({ session: result })
+  const cached = getCached(sessionId)
+  return c.json({
+    session: cached
+      ? { ...session, aiTitle: cached.title, aiDescription: cached.description }
+      : session,
+  })
 })
 
-// Generate AI title for a session
-app.post('/:sessionId/title', async (c) => {
-  const workerUrl = getTitleWorkerUrl()
-  if (!workerUrl) {
-    return c.json({ error: 'TITLE_WORKER_URL not configured' }, 500)
-  }
+// Generate AI summary for a session (title + description + turn titles)
+app.post('/:sessionId/summarize', async (c) => {
+  const workerUrl = getWorkerUrl()
+  if (!workerUrl) return c.json({ error: 'TITLE_WORKER_URL not configured' }, 500)
 
   const sessionId = c.req.param('sessionId')
+  const cached = getCached(sessionId)
+  if (cached) return c.json(cached)
 
-  // Check cache first
-  const cached = getCachedTitle(sessionId)
-  if (cached) {
-    return c.json({ title: cached.title, description: cached.description, cached: true })
-  }
-
-  // Get the session to find its JSONL path
   const sessions = await discoverSessions()
   const session = sessions.find((s) => s.sessionId === sessionId)
-  if (!session) {
-    return c.json({ error: 'Session not found' }, 404)
-  }
+  if (!session) return c.json({ error: 'Session not found' }, 404)
 
-  // Extract user messages for context: first (project context) + last few (recent work)
   const jsonlPath = (session as { jsonlPath?: string }).jsonlPath
-  if (!jsonlPath) {
-    return c.json({ error: 'No conversation data' }, 404)
-  }
+  if (!jsonlPath) return c.json({ error: 'No conversation data' }, 404)
 
-  const conversation = parseConversation(jsonlPath, 0, 50000)
-  const allUserMessages = conversation.messages
-    .filter((m) => m.type === 'user')
-    .map((m) => {
-      const text = m.content
-        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map((b) => b.text)
-        .join(' ')
-      return text.slice(0, 200)
-    })
-    .filter((t) => t.length > 0)
+  // Parse and group into turns
+  const conversation = parseConversation(jsonlPath, 0, 3000)
+  const allTurns = groupIntoTurns(conversation.messages)
 
-  if (allUserMessages.length === 0) {
-    return c.json({ error: 'No user messages to summarize' }, 400)
-  }
+  // Filter to real turns (skip compactions and empty)
+  const realTurns = allTurns.filter((t) =>
+    !t.isCompaction && (t.userPrompt || t.assistantPreview || t.toolSummary.length > 0)
+  )
 
-  // First message for project context, last 3 for recent activity
-  const first = allUserMessages[0]
-  const recent = allUserMessages.slice(-3)
-  // Deduplicate if the session is short
-  const contextMessages = first && !recent.includes(first)
-    ? [first, ...recent]
-    : recent
+  if (realTurns.length === 0) return c.json({ error: 'No turns to summarize' }, 400)
+
+  // Build full context for each turn — no truncation on user prompts
+  const turnData = realTurns.map((t) => ({
+    prompt: t.userPrompt || '(no prompt)',
+    response: t.assistantPreview || '',
+    tools: t.toolSummary.map((ts) => ts.count > 1 ? `${ts.name}x${ts.count}` : ts.name).join(', ') || 'none',
+  }))
 
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000)
     const res = await fetch(workerUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: contextMessages }),
+      body: JSON.stringify({ turns: turnData }),
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
 
-    if (!res.ok) {
-      const err = await res.text()
-      return c.json({ error: `Worker error: ${err}` }, 502)
+    if (!res.ok) return c.json({ error: 'Worker error' }, 502)
+
+    const result = await res.json() as {
+      title: string
+      description: string
+      turnTitles: string[]
     }
 
-    const { title, description } = (await res.json()) as { title: string; description: string }
+    // Map turn titles back to full turn list (with empty strings for compactions)
+    const fullTurnTitles: string[] = []
+    let realIdx = 0
+    for (const turn of allTurns) {
+      const isEmpty = turn.isCompaction ||
+        (!turn.userPrompt && !turn.assistantPreview && turn.toolSummary.length === 0)
+      if (isEmpty) {
+        fullTurnTitles.push('')
+      } else {
+        fullTurnTitles.push(result.turnTitles[realIdx] ?? '')
+        realIdx++
+      }
+    }
 
-    // Cache the result
-    setCachedTitle(sessionId, title, description, session.messageCount)
+    const summary = {
+      title: result.title,
+      description: result.description,
+      turnTitles: fullTurnTitles,
+      generatedAt: new Date().toISOString(),
+    }
 
-    return c.json({ title, description, cached: false })
+    setCached(sessionId, summary)
+    return c.json(summary)
   } catch (e) {
-    return c.json({ error: e instanceof Error ? e.message : 'Worker request failed' }, 502)
+    return c.json({ error: e instanceof Error ? e.message : 'Failed' }, 502)
   }
 })
 
