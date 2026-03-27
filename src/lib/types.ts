@@ -11,8 +11,6 @@ export interface Session {
   messageCount: number
   gitBranch?: string
   version?: string
-  aiTitle?: string
-  aiDescription?: string
 }
 
 export interface ConversationMessage {

@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { Terminal, Monitor, Copy, Check } from 'lucide-react'
 import type { Session } from '../../lib/types.ts'
 import { relativeTimeShort, truncate } from '../../lib/format.ts'
-import { api } from '../../lib/api.ts'
 
 interface SessionCardProps {
   session: Session
@@ -12,38 +11,6 @@ interface SessionCardProps {
 
 export function SessionCard({ session, isSelected, onSelect }: SessionCardProps) {
   const [copied, setCopied] = useState(false)
-  const [aiTitle, setAiTitle] = useState(session.aiTitle)
-  const [aiDescription, setAiDescription] = useState(session.aiDescription)
-  const [generating, setGenerating] = useState(false)
-  const attempted = useRef(false)
-
-  // Auto-generate on first view if not cached
-  useEffect(() => {
-    if (aiTitle || attempted.current || generating) return
-    attempted.current = true
-
-    const timer = setTimeout(() => {
-      setGenerating(true)
-      api.summarizeSession(session.sessionId)
-        .then((res) => {
-          if (res.title && !res.error) {
-            setAiTitle(res.title)
-            setAiDescription(res.description)
-          }
-        })
-        .catch(() => {})
-        .finally(() => setGenerating(false))
-    }, 500 + Math.random() * 2000)
-
-    return () => clearTimeout(timer)
-  }, [session.sessionId, aiTitle])
-
-  useEffect(() => {
-    if (session.aiTitle && !aiTitle) {
-      setAiTitle(session.aiTitle)
-      setAiDescription(session.aiDescription)
-    }
-  }, [session.aiTitle])
 
   const copyResumeCommand = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -54,7 +21,6 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
 
   const Icon = session.entrypoint === 'desktop' ? Monitor : Terminal
   const iconColor = session.isActive ? '#859900' : 'var(--color-text-muted)'
-  const title = aiTitle || session.displayName
 
   return (
     <div
@@ -89,17 +55,14 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
           fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3,
         }}>
-          {generating
-            ? <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', fontWeight: 400 }}>generating...</span>
-            : truncate(title, 45)
-          }
+          {truncate(session.displayName, 45)}
         </div>
         <div style={{
           fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500,
           color: 'var(--color-text-muted)', lineHeight: 1.2,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {aiDescription || session.projectName}
+          {session.projectName}
         </div>
       </div>
 

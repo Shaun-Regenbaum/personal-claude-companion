@@ -1,19 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import {
-  ChevronDown, ChevronRight, User, Sparkles,
+  ChevronDown, ChevronRight, User, Sparkles, AlertCircle,
   Pencil, FileCode, BookOpen, TerminalSquare, Search,
   FolderSearch, Bot, Globe, Brain, ImageIcon
 } from 'lucide-react'
 import type { TurnGroup } from '../../lib/timeline-summarizer.ts'
 import { formatTimestamp } from '../../lib/format.ts'
 import { TimelineMessage } from './TimelineMessage.tsx'
-import { api } from '../../lib/api.ts'
 
 interface SummaryViewProps {
   turns: TurnGroup[]
   toolResults: Map<string, string>
   onNavigateToTool?: (toolUseId: string) => void
-  sessionId: string
 }
 
 const TOOL_ICONS: Record<string, { icon: typeof Pencil; color: string }> = {
@@ -27,30 +25,15 @@ const TOOL_ICONS: Record<string, { icon: typeof Pencil; color: string }> = {
   WebSearch: { icon: Globe, color: '#2aa198' },
 }
 
-export function SummaryView({ turns, toolResults, onNavigateToTool, sessionId }: SummaryViewProps) {
-  const [turnTitles, setTurnTitles] = useState<string[]>([])
-  const fetchedFor = useRef('')
-
-  useEffect(() => {
-    if (!sessionId || fetchedFor.current === sessionId) return
-    fetchedFor.current = sessionId
-
-    api.summarizeSession(sessionId)
-      .then((res) => {
-        if (res.turnTitles?.length) setTurnTitles(res.turnTitles)
-      })
-      .catch(() => {})
-  }, [sessionId])
-
+export function SummaryView({ turns, toolResults, onNavigateToTool }: SummaryViewProps) {
   // Collapse consecutive compactions/empty turns
   const items: Array<
-    | { type: 'turn'; turn: TurnGroup; turnIdx: number }
+    | { type: 'turn'; turn: TurnGroup }
     | { type: 'compacted'; count: number }
   > = []
   let compactedCount = 0
 
-  for (let i = 0; i < turns.length; i++) {
-    const turn = turns[i]
+  for (const turn of turns) {
     const isEmpty = turn.isCompaction ||
       (!turn.userPrompt && !turn.assistantPreview && turn.toolSummary.length === 0)
 
@@ -61,7 +44,7 @@ export function SummaryView({ turns, toolResults, onNavigateToTool, sessionId }:
         items.push({ type: 'compacted', count: compactedCount })
         compactedCount = 0
       }
-      items.push({ type: 'turn', turn, turnIdx: i })
+      items.push({ type: 'turn', turn })
     }
   }
   if (compactedCount > 0) items.push({ type: 'compacted', count: compactedCount })
@@ -84,7 +67,6 @@ export function SummaryView({ turns, toolResults, onNavigateToTool, sessionId }:
           <TurnRow
             key={item.turn.turnNumber}
             turn={item.turn}
-            aiTitle={turnTitles[item.turnIdx] || ''}
             toolResults={toolResults}
             onNavigateToTool={onNavigateToTool}
           />
@@ -94,16 +76,14 @@ export function SummaryView({ turns, toolResults, onNavigateToTool, sessionId }:
   )
 }
 
-function TurnRow({ turn, aiTitle, toolResults, onNavigateToTool }: {
+function TurnRow({ turn, toolResults, onNavigateToTool }: {
   turn: TurnGroup
-  aiTitle: string
   toolResults: Map<string, string>
   onNavigateToTool?: (toolUseId: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
 
-  const title = aiTitle || turn.userPrompt || turn.assistantPreview || '...'
-  const subtitle = aiTitle && turn.userPrompt && aiTitle !== turn.userPrompt ? turn.userPrompt : null
+  const title = turn.userPrompt || turn.assistantPreview || '...'
 
   return (
     <div style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -127,7 +107,6 @@ function TurnRow({ turn, aiTitle, toolResults, onNavigateToTool }: {
         <User size={13} style={{ color: '#268bd2', flexShrink: 0, marginTop: 2 }} strokeWidth={2.2} />
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Title */}
           <div style={{
             fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.4,
@@ -135,29 +114,18 @@ function TurnRow({ turn, aiTitle, toolResults, onNavigateToTool }: {
             {title}
           </div>
 
-          {/* Original prompt as subtitle when AI title is shown */}
-          {subtitle && (
+          {turn.assistantPreview && turn.userPrompt && (
             <div style={{
-              fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic',
+              fontSize: 11, color: 'var(--color-text-muted)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               lineHeight: 1.3, marginTop: 1, maxWidth: 400,
             }}>
-              {subtitle}
+              <Sparkles size={10} style={{ color: '#2aa198', verticalAlign: 'middle', marginRight: 3 }} strokeWidth={2} />
+              {turn.assistantPreview}
             </div>
           )}
 
-          {/* Tool chips */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-            {!aiTitle && turn.assistantPreview && turn.userPrompt && (
-              <span style={{
-                fontSize: 11, color: 'var(--color-text-muted)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300,
-              }}>
-                <Sparkles size={10} style={{ color: '#2aa198', verticalAlign: 'middle', marginRight: 3 }} strokeWidth={2} />
-                {turn.assistantPreview}
-              </span>
-            )}
-
             {turn.toolSummary.map(({ name, count }) => {
               const cfg = TOOL_ICONS[name] ?? { icon: TerminalSquare, color: 'var(--color-text-muted)' }
               const Icon = cfg.icon
@@ -175,12 +143,12 @@ function TurnRow({ turn, aiTitle, toolResults, onNavigateToTool }: {
             })}
 
             {turn.hasThinking && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--color-text-muted)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, color: 'var(--color-text-muted)' }}>
                 <Brain size={10} strokeWidth={2} />
               </span>
             )}
             {turn.hasImages && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 10, color: '#6c71c4' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, color: '#6c71c4' }}>
                 <ImageIcon size={10} strokeWidth={2} />
               </span>
             )}

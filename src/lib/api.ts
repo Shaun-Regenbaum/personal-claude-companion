@@ -75,13 +75,6 @@ export const api = {
       lastActivity: string | null
     }>(`/activity/summary/${sessionId}`),
 
-  summarizeSession: (sessionId: string) =>
-    fetch(`${API_BASE}/sessions/${sessionId}/summarize`, { method: 'POST' })
-      .then((r) => r.json()) as Promise<{
-        title: string; description: string; turnTitles: string[];
-        generatedAt?: string; error?: string
-      }>,
-
   deleteSkill: (name: string) =>
     fetch(`${API_BASE}/config/skills/${name}`, { method: 'DELETE' }).then((r) => r.json()),
 
