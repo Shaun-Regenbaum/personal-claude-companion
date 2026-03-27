@@ -6,6 +6,23 @@ import { findDisplayNameForSession, invalidateHistoryCache } from './history-ind
 const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
 const SESSIONS_DIR = join(CLAUDE_DIR, 'sessions')
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects')
+const COMPANION_NAMES_PATH = join(CLAUDE_DIR, 'companion-names.json')
+
+// Companion-managed session names (highest priority)
+let companionNames: Record<string, string> = {}
+let companionNamesMtime = 0
+
+function loadCompanionNames(): Record<string, string> {
+  try {
+    if (!existsSync(COMPANION_NAMES_PATH)) return companionNames
+    const stat = statSync(COMPANION_NAMES_PATH)
+    if (stat.mtimeMs !== companionNamesMtime) {
+      companionNames = JSON.parse(readFileSync(COMPANION_NAMES_PATH, 'utf-8'))
+      companionNamesMtime = stat.mtimeMs
+    }
+  } catch {}
+  return companionNames
+}
 const DESKTOP_SESSIONS_DIR = join(
   process.env.HOME ?? '',
   'Library/Application Support/Claude/claude-code-sessions'
@@ -18,6 +35,7 @@ interface SessionMetadata {
   startedAt: number
   kind: string
   entrypoint: string
+  name?: string
 }
 
 interface DiscoveredSession {
@@ -128,7 +146,7 @@ function scanProjectsDir(
           lastActivityAt: fileStat.mtimeMs,
           entrypoint: (sessionMeta?.entrypoint as 'cli' | 'desktop') ?? 'cli',
           isActive: activePids.has(sessionId),
-          displayName: displayName || sessionId.slice(0, 8),
+          displayName: loadCompanionNames()[sessionId] || sessionMeta?.name || displayName || sessionId.slice(0, 8),
           messageCount,
           gitBranch,
           version,
@@ -168,7 +186,7 @@ function scanDesktopSessions(
           lastActivityAt: fileStat.mtimeMs,
           entrypoint: 'desktop',
           isActive: activePids.has(sessionId),
-          displayName: displayName || sessionId.slice(0, 8),
+          displayName: loadCompanionNames()[sessionId] || displayName || sessionId.slice(0, 8),
           messageCount,
           gitBranch,
           version,
