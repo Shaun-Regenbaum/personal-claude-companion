@@ -6,10 +6,11 @@ const ACTIVITY_PATH = join(process.env.HOME ?? '', '.claude', 'companion-activit
 export interface ActivityEvent {
   ts: string
   session: string
-  event: 'plan-update' | 'file-change' | 'turn-complete' | 'task-done'
+  event: 'plan-update' | 'file-change' | 'turn-complete' | 'task-done' | 'turn-summary'
   plan?: string
   file?: string
   tool?: string
+  summary?: string
 }
 
 let cachedEvents: ActivityEvent[] = []

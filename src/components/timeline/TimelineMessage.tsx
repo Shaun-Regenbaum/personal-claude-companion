@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { User, Sparkles, ChevronDown, ChevronRight, AlertCircle, Image as ImageIcon } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import type { ConversationMessage, MessageContent } from '../../lib/types.ts'
 import { ToolCallBlock } from './ToolCallBlock.tsx'
 import { formatTimestamp } from '../../lib/format.ts'
@@ -104,13 +105,17 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
                 fontWeight: 500,
                 lineHeight: 1.6,
                 color: 'var(--color-text-primary)',
-                whiteSpace: 'pre-wrap',
+                whiteSpace: isUser ? 'pre-wrap' : undefined,
                 wordBreak: 'break-word',
                 maxHeight: textExpanded ? 'none' : (isLongText ? 66 : 'none'),
                 overflow: 'hidden',
               }}
             >
-              {fullText}
+              {isUser ? fullText : (
+                <div className="timeline-markdown">
+                  <ReactMarkdown>{fullText}</ReactMarkdown>
+                </div>
+              )}
             </div>
             {isLongText && (
               <button

@@ -67,11 +67,20 @@ function App() {
     setFocusedPlan(null)
   }, [])
 
-  // Navigate from timeline plan marker to plans tab
+  // Navigate to plan view (inline, not a separate tab)
   const handleClickPlan = useCallback((planName: string) => {
     setFocusedPlan(planName)
     setActiveTab('plans')
   }, [])
+
+  // First session plan name for the header button
+  const firstPlanName = sessionPlanNames.length > 0 ? sessionPlanNames[0] : null
+  const handleHeaderPlanClick = useCallback(() => {
+    if (firstPlanName) {
+      setFocusedPlan(firstPlanName)
+      setActiveTab('plans')
+    }
+  }, [firstPlanName])
 
   // Navigate from timeline tool call to diffs tab
   const handleNavigateToTool = useCallback((toolUseId: string) => {
@@ -111,6 +120,8 @@ function App() {
           session={selectedSession}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          planName={firstPlanName}
+          onClickPlan={handleHeaderPlanClick}
         />
 
         <div ref={scrollRef} style={{

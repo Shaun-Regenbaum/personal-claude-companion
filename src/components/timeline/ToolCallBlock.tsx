@@ -182,6 +182,19 @@ function formatInput(name: string, input: Record<string, unknown>): string {
     const content = (input.content as string) ?? ''
     return `${input.file_path}\n\n${content.slice(0, 2000)}${content.length > 2000 ? '\n...' : ''}`
   }
+  if (name === 'Agent') {
+    const desc = (input.description as string) ?? ''
+    const type = (input.subagent_type as string) ?? (input.type as string) ?? ''
+    const prompt = (input.prompt as string) ?? ''
+    const truncatedPrompt = prompt.length > 300
+      ? prompt.slice(0, 300) + '\n... (truncated)'
+      : prompt
+    const parts: string[] = []
+    if (desc) parts.push(`Description: ${desc}`)
+    if (type) parts.push(`Type: ${type}`)
+    if (truncatedPrompt) parts.push(`\nPrompt:\n${truncatedPrompt}`)
+    return parts.join('\n') || JSON.stringify(input, null, 2)
+  }
   return JSON.stringify(input, null, 2)
 }
 
