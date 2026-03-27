@@ -1,9 +1,78 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { User, Sparkles, ChevronDown, ChevronRight, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import type { ConversationMessage, MessageContent } from '../../lib/types.ts'
 import { ToolCallBlock } from './ToolCallBlock.tsx'
 import { formatTimestamp } from '../../lib/format.ts'
+
+// Detect unfenced JSON/code blocks and wrap them in markdown code fences
+function prepareMarkdown(text: string): string {
+  // Split into lines and find contiguous JSON-like blocks that aren't already fenced
+  const lines = text.split('\n')
+  const result: string[] = []
+  let inJsonBlock = false
+  let braceDepth = 0
+  let jsonStart = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trimStart()
+
+    // Skip if we're inside a markdown code fence
+    if (trimmed.startsWith('```')) {
+      if (inJsonBlock) {
+        // Close our auto-fence before their fence
+        result.push('```')
+        inJsonBlock = false
+        braceDepth = 0
+      }
+      result.push(line)
+      continue
+    }
+
+    if (!inJsonBlock) {
+      // Detect start of a JSON block: line is just { or starts with {
+      if (trimmed === '{' || trimmed === '[') {
+        inJsonBlock = true
+        braceDepth = 0
+        jsonStart = i
+        result.push('```json')
+        // Count braces on this line
+        for (const ch of trimmed) {
+          if (ch === '{' || ch === '[') braceDepth++
+          if (ch === '}' || ch === ']') braceDepth--
+        }
+        result.push(line)
+        if (braceDepth <= 0) {
+          result.push('```')
+          inJsonBlock = false
+          braceDepth = 0
+        }
+        continue
+      }
+      result.push(line)
+    } else {
+      // Inside a JSON block, track brace depth
+      for (const ch of trimmed) {
+        if (ch === '{' || ch === '[') braceDepth++
+        if (ch === '}' || ch === ']') braceDepth--
+      }
+      result.push(line)
+      if (braceDepth <= 0) {
+        result.push('```')
+        inJsonBlock = false
+        braceDepth = 0
+      }
+    }
+  }
+
+  // Close unclosed block
+  if (inJsonBlock) {
+    result.push('```')
+  }
+
+  return result.join('\n')
+}
 
 interface TimelineMessageProps {
   message: ConversationMessage
@@ -13,6 +82,8 @@ interface TimelineMessageProps {
 
 export function TimelineMessage({ message, toolResults, onNavigateToTool }: TimelineMessageProps) {
   const [textExpanded, setTextExpanded] = useState(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const textRef = useRef<HTMLDivElement>(null)
 
   if (message.type === 'file-history-snapshot') {
     return (
@@ -63,7 +134,13 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
 
   const hasText = textBlocks.length > 0
   const fullText = textBlocks.map((b) => b.text).join('\n')
-  const isLongText = fullText.length > 200
+  const maxCollapsedHeight = 66
+
+  useEffect(() => {
+    if (textRef.current && !textExpanded) {
+      setIsOverflowing(textRef.current.scrollHeight > maxCollapsedHeight)
+    }
+  }, [fullText, textExpanded])
 
   return (
     <div style={{ margin: isUser ? '12px 0 0' : '0' }}>
@@ -100,6 +177,7 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
           {/* Text */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
+              ref={textRef}
               style={{
                 fontSize: 13,
                 fontWeight: 500,
@@ -107,17 +185,17 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
                 color: 'var(--color-text-primary)',
                 whiteSpace: isUser ? 'pre-wrap' : undefined,
                 wordBreak: 'break-word',
-                maxHeight: textExpanded ? 'none' : (isLongText ? 66 : 'none'),
+                maxHeight: textExpanded ? 'none' : maxCollapsedHeight,
                 overflow: 'hidden',
               }}
             >
               {isUser ? fullText : (
                 <div className="timeline-markdown">
-                  <ReactMarkdown>{fullText}</ReactMarkdown>
+                  <ReactMarkdown>{prepareMarkdown(fullText)}</ReactMarkdown>
                 </div>
               )}
             </div>
-            {isLongText && (
+            {isOverflowing && (
               <button
                 onClick={() => setTextExpanded(!textExpanded)}
                 style={{
