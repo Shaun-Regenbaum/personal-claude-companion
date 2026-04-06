@@ -8,6 +8,7 @@ import plans from './routes/plans.ts'
 import config from './routes/config.ts'
 import git from './routes/git.ts'
 import activity from './routes/activity.ts'
+import summary from './routes/summary.ts'
 import { startFileWatcher } from './watch/file-watcher.ts'
 
 const app = new Hono()
@@ -22,6 +23,7 @@ app.route('/api/plans', plans)
 app.route('/api/config', config)
 app.route('/api/git', git)
 app.route('/api/activity', activity)
+app.route('/api/summary', summary)
 
 app.get('/api/health', (c) => c.json({ ok: true, timestamp: new Date().toISOString() }))
 
@@ -34,4 +36,5 @@ console.log(`[server] Claude Companion API running on http://localhost:${port}`)
 export default {
   port,
   fetch: app.fetch,
+  idleTimeout: 120,
 }

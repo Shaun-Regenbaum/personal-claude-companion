@@ -198,4 +198,4 @@ function formatInput(name: string, input: Record<string, unknown>): string {
   return JSON.stringify(input, null, 2)
 }
 
-export { TOOL_STYLES }
+export { TOOL_STYLES, getToolSummary, getEditStats, shortPath, formatInput }

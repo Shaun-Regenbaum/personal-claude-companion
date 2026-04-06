@@ -6,11 +6,35 @@ const ACTIVITY_PATH = join(process.env.HOME ?? '', '.claude', 'companion-activit
 export interface ActivityEvent {
   ts: string
   session: string
-  event: 'plan-update' | 'file-change' | 'turn-complete' | 'task-done' | 'turn-summary'
+  event: 'plan-update' | 'file-change' | 'turn-complete' | 'task-done' | 'turn-summary' | 'turn-data'
   plan?: string
   file?: string
   tool?: string
   summary?: string
+  // turn-data fields
+  turnNumber?: number
+  userPrompt?: string
+  userTimestamp?: string
+  endTimestamp?: string
+  assistantPreview?: string
+  toolCalls?: { name: string; file: string | null }[]
+  toolSummary?: { name: string; count: number }[]
+  hasThinking?: boolean
+  hasImages?: boolean
+  messageCount?: number
+}
+
+export interface HookTurnData {
+  turnNumber: number
+  userPrompt: string
+  userTimestamp: string
+  endTimestamp: string
+  assistantPreview: string
+  toolCalls: { name: string; file: string | null }[]
+  toolSummary: { name: string; count: number }[]
+  hasThinking: boolean
+  hasImages: boolean
+  messageCount: number
 }
 
 let cachedEvents: ActivityEvent[] = []
@@ -70,6 +94,28 @@ export function getSessionActivitySummary(sessionId: string) {
   const lastActivity = events.length > 0 ? events[events.length - 1].ts : null
 
   return { turns, fileChanges, tasksDone, planUpdates, lastActivity }
+}
+
+export function getHookTurns(sessionId: string): HookTurnData[] | null {
+  const events = getActivityEvents(sessionId)
+    .filter((e) => e.event === 'turn-data')
+
+  if (events.length === 0) return null
+
+  return events
+    .sort((a, b) => (a.turnNumber ?? 0) - (b.turnNumber ?? 0))
+    .map((e) => ({
+      turnNumber: e.turnNumber ?? 0,
+      userPrompt: e.userPrompt ?? '',
+      userTimestamp: e.userTimestamp ?? '',
+      endTimestamp: e.endTimestamp ?? '',
+      assistantPreview: e.assistantPreview ?? '',
+      toolCalls: e.toolCalls ?? [],
+      toolSummary: e.toolSummary ?? [],
+      hasThinking: e.hasThinking ?? false,
+      hasImages: e.hasImages ?? false,
+      messageCount: e.messageCount ?? 0,
+    }))
 }
 
 export function invalidateActivityCache(): void {

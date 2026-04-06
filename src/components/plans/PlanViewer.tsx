@@ -1,6 +1,9 @@
-import { useState, useMemo } from 'react'
-import { FileText, Clock, ListChecks, Play, CheckCircle2, Circle, Pencil } from 'lucide-react'
+import { useState, useMemo, useCallback } from 'react'
+import { FileText, Clock, ListChecks, Play, CheckCircle2, Circle, Pencil, X, Save } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { HighlightedCode } from '../timeline/HighlightedCode.tsx'
+import { api } from '../../lib/api.ts'
 import { usePlans, usePlanContent } from '../../hooks/usePlans.ts'
 import { relativeTime, formatTimestamp } from '../../lib/format.ts'
 import type { PlanSummary } from '../../lib/types.ts'
@@ -15,23 +18,54 @@ interface PlanViewerProps {
 }
 
 export function PlanViewer({ sessionPlanNames, initialPlan, tasks, taskEvents, planRefs }: PlanViewerProps) {
-  const { plans, loading: plansLoading } = usePlans()
+  const { plans, loading: plansLoading, refresh: refreshPlans } = usePlans()
   const [selectedPlan, setSelectedPlan] = useState<string | null>(initialPlan ?? null)
   const { content, loading: contentLoading } = usePlanContent(selectedPlan)
-
-  // Sort: session-referenced plans first, then by recency
-  const sortedPlans = useMemo(() => {
-    const sessionSet = new Set(sessionPlanNames)
-    return [...plans].sort((a, b) => {
-      const aSession = sessionSet.has(a.name) ? 1 : 0
-      const bSession = sessionSet.has(b.name) ? 1 : 0
-      if (aSession !== bSession) return bSession - aSession
-      return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
-    })
-  }, [plans, sessionPlanNames])
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [saving, setSaving] = useState(false)
 
   // Auto-select first session plan or initialPlan
   const effectivePlan = selectedPlan ?? (sessionPlanNames.length > 0 ? sessionPlanNames[0] : null)
+
+  const handleStartEdit = useCallback(() => {
+    setEditContent(content)
+    setEditing(true)
+  }, [content])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditing(false)
+    setEditContent('')
+  }, [])
+
+  const handleSave = useCallback(async () => {
+    if (!effectivePlan) return
+    setSaving(true)
+    try {
+      await api.updatePlan(effectivePlan, editContent)
+      setEditing(false)
+      refreshPlans()
+      // Force content refresh by toggling selection
+      const plan = effectivePlan
+      setSelectedPlan(null)
+      setTimeout(() => setSelectedPlan(plan), 0)
+    } catch {
+      // keep editing on error
+    } finally {
+      setSaving(false)
+    }
+  }, [effectivePlan, editContent, refreshPlans])
+
+  // Show only session plans (if any), otherwise show all plans
+  const sortedPlans = useMemo(() => {
+    const sessionSet = new Set(sessionPlanNames)
+    const filtered = sessionPlanNames.length > 0
+      ? plans.filter((p) => sessionSet.has(p.name))
+      : plans
+    return [...filtered].sort((a, b) =>
+      new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
+    )
+  }, [plans, sessionPlanNames])
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
@@ -68,13 +102,94 @@ export function PlanViewer({ sessionPlanNames, initialPlan, tasks, taskEvents, p
       </div>
 
       {/* Plan content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column' }}>
+        {/* Edit toolbar */}
+        {effectivePlan && content && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 6,
+            marginBottom: 8,
+          }}>
+            {editing ? (
+              <>
+                <button
+                  onClick={handleCancelEdit}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, padding: '4px 10px',
+                    background: 'var(--color-bg-tertiary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 4, cursor: 'pointer',
+                    color: 'var(--color-text-secondary)',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <X size={11} /> Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 11, padding: '4px 10px',
+                    background: '#859900',
+                    border: 'none',
+                    borderRadius: 4, cursor: 'pointer',
+                    color: '#fff',
+                    fontFamily: 'inherit',
+                    fontWeight: 600,
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  <Save size={11} /> {saving ? 'Saving...' : 'Save'}
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleStartEdit}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, padding: '4px 10px',
+                  background: 'none',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 4, cursor: 'pointer',
+                  color: 'var(--color-text-secondary)',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <Pencil size={11} /> Edit
+              </button>
+            )}
+          </div>
+        )}
+
         {contentLoading ? (
           <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Loading plan...</div>
         ) : effectivePlan && content ? (
-          <div className="plan-markdown">
-            <ReactMarkdown>{content}</ReactMarkdown>
-          </div>
+          editing ? (
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              style={{
+                flex: 1,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                lineHeight: 1.6,
+                padding: 12,
+                background: 'var(--color-bg-secondary)',
+                color: 'var(--color-text-primary)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 4,
+                resize: 'none',
+                outline: 'none',
+              }}
+            />
+          ) : (
+            <div className="plan-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: HighlightedCode }}>{content}</ReactMarkdown>
+            </div>
+          )
         ) : (
           <div style={{
             display: 'flex',

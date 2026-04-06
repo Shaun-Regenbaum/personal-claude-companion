@@ -73,15 +73,6 @@ function App() {
     setActiveTab('plans')
   }, [])
 
-  // First session plan name for the header button
-  const firstPlanName = sessionPlanNames.length > 0 ? sessionPlanNames[0] : null
-  const handleHeaderPlanClick = useCallback(() => {
-    if (firstPlanName) {
-      setFocusedPlan(firstPlanName)
-      setActiveTab('plans')
-    }
-  }, [firstPlanName])
-
   // Navigate from timeline tool call to diffs tab
   const handleNavigateToTool = useCallback((toolUseId: string) => {
     setFocusedToolUseId(toolUseId)
@@ -120,8 +111,6 @@ function App() {
           session={selectedSession}
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          planName={firstPlanName}
-          onClickPlan={handleHeaderPlanClick}
         />
 
         <div ref={scrollRef} style={{

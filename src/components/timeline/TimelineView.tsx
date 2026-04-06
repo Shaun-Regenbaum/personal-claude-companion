@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { List, Layers } from 'lucide-react'
 import type { ConversationMessage } from '../../lib/types.ts'
 import type { PlanReference, TaskEvent, TaskInfo } from '../../lib/plan-linker.ts'
-import { groupIntoTurns } from '../../lib/timeline-summarizer.ts'
+import { useTurns } from '../../hooks/useTurns.ts'
 import { TimelineMessage } from './TimelineMessage.tsx'
 import { PlanMarker } from './PlanMarker.tsx'
 import { TaskMarker } from './TaskMarker.tsx'
@@ -64,7 +64,7 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
     })
   }, [messages])
 
-  const turns = useMemo(() => groupIntoTurns(messages), [messages])
+  const { turns } = useTurns(sessionId, messages)
 
   if (loading && messages.length === 0) {
     return (
@@ -145,7 +145,7 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
 
       {/* Content */}
       {mode === 'summary' ? (
-        <SummaryView turns={turns} toolResults={toolResults} onNavigateToTool={onNavigateToTool} />
+        <SummaryView sessionId={sessionId} turns={turns} messages={messages} toolResults={toolResults} onNavigateToTool={onNavigateToTool} />
       ) : (
         <div style={{ padding: '8px 24px 24px' }}>
           {displayMessages.map((msg, i) => {

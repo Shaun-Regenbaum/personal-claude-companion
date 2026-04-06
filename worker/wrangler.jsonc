@@ -1,0 +1,14 @@
+{
+  "name": "companion-summary",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "ai": {
+    "binding": "AI"
+  },
+  "routes": [
+    {
+      "pattern": "kimi.402.network/*",
+      "zone_name": "402.network"
+    }
+  ]
+}

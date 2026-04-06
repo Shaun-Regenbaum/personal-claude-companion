@@ -437,6 +437,19 @@ body {
   padding: 0;
 }
 
+.timeline-markdown pre:has(.shiki-container),
+.plan-markdown pre:has(.shiki-container) {
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.timeline-markdown .shiki-container pre,
+.plan-markdown .shiki-container pre {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
 .timeline-markdown table {
   border-collapse: collapse;
   margin: 6px 0;

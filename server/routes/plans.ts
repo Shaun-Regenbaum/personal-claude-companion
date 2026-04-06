@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { readdirSync, readFileSync, statSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs'
 import { join } from 'path'
 
 const PLANS_DIR = join(process.env.HOME ?? '', '.claude', 'plans')
@@ -42,6 +42,31 @@ app.get('/:name', (c) => {
     })
   } catch {
     return c.json({ error: 'Plan not found' }, 404)
+  }
+})
+
+app.put('/:name', async (c) => {
+  const name = c.req.param('name')
+
+  // Validate plan name: alphanumeric, hyphens, underscores only
+  if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+    return c.json({ error: 'Invalid plan name' }, 400)
+  }
+
+  const path = join(PLANS_DIR, `${name}.md`)
+
+  try {
+    const body = await c.req.json<{ content: string }>()
+    if (typeof body.content !== 'string') {
+      return c.json({ error: 'content required' }, 400)
+    }
+
+    writeFileSync(path, body.content, 'utf-8')
+    const stat = statSync(path)
+    return c.json({ name, modifiedAt: stat.mtime.toISOString() })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return c.json({ error: message }, 500)
   }
 })
 

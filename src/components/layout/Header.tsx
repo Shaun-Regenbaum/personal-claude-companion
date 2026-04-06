@@ -1,21 +1,20 @@
-import { GitBranch, MessageSquare, Terminal, Monitor, FileText } from 'lucide-react'
+import { GitBranch, MessageSquare, Terminal, Monitor } from 'lucide-react'
 import type { Session } from '../../lib/types.ts'
 
 interface HeaderProps {
   session: Session | null
   activeTab: string
   onTabChange: (tab: string) => void
-  planName?: string | null
-  onClickPlan?: () => void
 }
 
 const tabs = [
   { id: 'timeline', label: 'Timeline' },
   { id: 'diffs', label: 'Files' },
+  { id: 'plans', label: 'Plans' },
   { id: 'config', label: 'Settings' },
 ]
 
-export function Header({ session, activeTab, onTabChange, planName, onClickPlan }: HeaderProps) {
+export function Header({ session, activeTab, onTabChange }: HeaderProps) {
   if (!session) {
     return (
       <div style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -110,8 +109,8 @@ export function Header({ session, activeTab, onTabChange, planName, onClickPlan 
         </span>
       </div>
 
-      {/* Tabs + plan button */}
-      <div style={{ padding: '4px 16px 6px', background: 'var(--color-bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* Tabs */}
+      <div style={{ padding: '4px 16px 6px', background: 'var(--color-bg-secondary)' }}>
         <div className="pzl-tabs" style={{ display: 'inline-flex' }}>
           {tabs.map((tab) => (
             <button
@@ -124,21 +123,6 @@ export function Header({ session, activeTab, onTabChange, planName, onClickPlan 
             </button>
           ))}
         </div>
-
-        {planName && onClickPlan && (
-          <button
-            onClick={onClickPlan}
-            className={`pzl-tab ${activeTab === 'plans' ? 'pzl-tab-active' : ''}`}
-            style={{
-              fontSize: 11, padding: '4px 10px',
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            <FileText size={11} strokeWidth={2} />
-            {planName}
-          </button>
-        )}
       </div>
     </div>
   )

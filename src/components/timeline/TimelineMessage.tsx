@@ -1,78 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { User, Sparkles, ChevronDown, ChevronRight, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { ConversationMessage, MessageContent } from '../../lib/types.ts'
 import { ToolCallBlock } from './ToolCallBlock.tsx'
+import { HighlightedCode } from './HighlightedCode.tsx'
 import { formatTimestamp } from '../../lib/format.ts'
-
-// Detect unfenced JSON/code blocks and wrap them in markdown code fences
-function prepareMarkdown(text: string): string {
-  // Split into lines and find contiguous JSON-like blocks that aren't already fenced
-  const lines = text.split('\n')
-  const result: string[] = []
-  let inJsonBlock = false
-  let braceDepth = 0
-  let jsonStart = -1
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const trimmed = line.trimStart()
-
-    // Skip if we're inside a markdown code fence
-    if (trimmed.startsWith('```')) {
-      if (inJsonBlock) {
-        // Close our auto-fence before their fence
-        result.push('```')
-        inJsonBlock = false
-        braceDepth = 0
-      }
-      result.push(line)
-      continue
-    }
-
-    if (!inJsonBlock) {
-      // Detect start of a JSON block: line is just { or starts with {
-      if (trimmed === '{' || trimmed === '[') {
-        inJsonBlock = true
-        braceDepth = 0
-        jsonStart = i
-        result.push('```json')
-        // Count braces on this line
-        for (const ch of trimmed) {
-          if (ch === '{' || ch === '[') braceDepth++
-          if (ch === '}' || ch === ']') braceDepth--
-        }
-        result.push(line)
-        if (braceDepth <= 0) {
-          result.push('```')
-          inJsonBlock = false
-          braceDepth = 0
-        }
-        continue
-      }
-      result.push(line)
-    } else {
-      // Inside a JSON block, track brace depth
-      for (const ch of trimmed) {
-        if (ch === '{' || ch === '[') braceDepth++
-        if (ch === '}' || ch === ']') braceDepth--
-      }
-      result.push(line)
-      if (braceDepth <= 0) {
-        result.push('```')
-        inJsonBlock = false
-        braceDepth = 0
-      }
-    }
-  }
-
-  // Close unclosed block
-  if (inJsonBlock) {
-    result.push('```')
-  }
-
-  return result.join('\n')
-}
+import { prepareMarkdown } from '../../lib/prepare-markdown.ts'
 
 interface TimelineMessageProps {
   message: ConversationMessage
@@ -119,8 +53,9 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
   const isAssistant = message.type === 'assistant'
   if (!isUser && !isAssistant) return null
 
+  const systemTagPattern = /^<(task-notification|system-reminder|system-status)\b/
   const textBlocks = message.content.filter((b): b is Extract<MessageContent, { type: 'text' }> =>
-    b.type === 'text' && b.text.trim().length > 0
+    b.type === 'text' && b.text.trim().length > 0 && !systemTagPattern.test(b.text.trim())
   )
   const toolBlocks = message.content.filter((b): b is Extract<MessageContent, { type: 'tool_use' }> =>
     b.type === 'tool_use'
@@ -183,17 +118,17 @@ export function TimelineMessage({ message, toolResults, onNavigateToTool }: Time
                 fontWeight: 500,
                 lineHeight: 1.6,
                 color: 'var(--color-text-primary)',
-                whiteSpace: isUser ? 'pre-wrap' : undefined,
                 wordBreak: 'break-word',
                 maxHeight: textExpanded ? 'none' : maxCollapsedHeight,
                 overflow: 'hidden',
               }}
             >
-              {isUser ? fullText : (
-                <div className="timeline-markdown">
-                  <ReactMarkdown>{prepareMarkdown(fullText)}</ReactMarkdown>
-                </div>
-              )}
+              <div className="timeline-markdown">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{ code: HighlightedCode }}
+                >{prepareMarkdown(fullText)}</ReactMarkdown>
+              </div>
             </div>
             {isOverflowing && (
               <button

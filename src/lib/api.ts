@@ -86,4 +86,17 @@ export const api = {
 
   deleteHook: (source: string, event: string, index: number) =>
     fetch(`${API_BASE}/config/hooks/${source}/${event}/${index}`, { method: 'DELETE' }).then((r) => r.json()),
+
+  getSummary: (sessionId: string) =>
+    fetch(`${API_BASE}/summary/${sessionId}`, { method: 'POST' }).then((r) => r.json()) as Promise<{
+      sections?: { title: string; summary: string; decisions: string[]; solved: string[]; openQuestions: string[] }[]
+      error?: string
+    }>,
+
+  updatePlan: (name: string, content: string) =>
+    fetch(`${API_BASE}/plans/${name}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }).then((r) => r.json()) as Promise<{ name: string; modifiedAt: string }>,
 }

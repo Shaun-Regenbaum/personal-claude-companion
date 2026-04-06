@@ -15,7 +15,7 @@ export function useSSE(handlers: Record<string, SSEHandler>) {
       if (closed) return
       evtSource = new EventSource('/api/events')
 
-      const eventTypes = ['session-update', 'conversation-update', 'plan-update', 'config-update']
+      const eventTypes = ['session-update', 'conversation-update', 'plan-update', 'config-update', 'activity-update', 'summary-update']
 
       for (const type of eventTypes) {
         evtSource.addEventListener(type, (e) => {
