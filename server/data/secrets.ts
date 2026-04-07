@@ -7,7 +7,8 @@ export function getSecret(name: string): string {
   if (cached !== undefined) return cached
 
   try {
-    const value = execSync(`setec get ${name}`, {
+    const setecBin = process.env.SETEC_PATH ?? `${process.env.HOME}/.local/bin/setec`
+    const value = execSync(`${setecBin} get ${name}`, {
       encoding: 'utf-8',
       timeout: 5000,
     }).trim()

@@ -1,32 +1,77 @@
-import { useState, useMemo, useCallback } from 'react'
-import { FileText, Clock, ListChecks, Play, CheckCircle2, Pencil, X, Save } from 'lucide-react'
+import { useState, useMemo, useCallback, useRef } from 'react'
+import { FileText, ListChecks, Play, CheckCircle2, Pencil, X, Save, Hash } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { HighlightedCode } from '../timeline/HighlightedCode.tsx'
 import { api } from '../../lib/api.ts'
 import { usePlans, usePlanContent } from '../../hooks/usePlans.ts'
-import { relativeTime, formatTimestamp } from '../../lib/format.ts'
-import type { PlanSummary } from '../../lib/types.ts'
-import type { TaskEvent, TaskInfo, PlanReference } from '../../lib/plan-linker.ts'
+import { formatTimestamp } from '../../lib/format.ts'
+import type { TaskEvent, PlanReference } from '../../lib/plan-linker.ts'
 
 interface PlanViewerProps {
   sessionPlanNames: string[]
   initialPlan?: string | null
-  tasks: TaskInfo[]
   taskEvents: TaskEvent[]
   planRefs: PlanReference[]
 }
 
+interface TocEntry {
+  level: number
+  text: string
+  slug: string
+}
+
+function extractToc(markdown: string): TocEntry[] {
+  const entries: TocEntry[] = []
+  for (const line of markdown.split('\n')) {
+    const match = line.match(/^(#{1,4})\s+(.+)/)
+    if (match) {
+      const text = match[2].replace(/[*_`\[\]]/g, '').trim()
+      const slug = text.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+      entries.push({ level: match[1].length, text, slug })
+    }
+  }
+  return entries
+}
+
 export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs }: PlanViewerProps) {
-  const { plans, loading: plansLoading, refresh: refreshPlans } = usePlans()
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(initialPlan ?? null)
-  const { content, loading: contentLoading } = usePlanContent(selectedPlan)
+  const { plans, refresh: refreshPlans } = usePlans()
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
-  // Auto-select first session plan or initialPlan
-  const effectivePlan = selectedPlan ?? (sessionPlanNames.length > 0 ? sessionPlanNames[0] : null)
+  // Sort plans: session plans first, then by most recent
+  const sortedPlans = useMemo(() => {
+    const sessionSet = new Set(sessionPlanNames)
+    const filtered = sessionPlanNames.length > 0
+      ? plans.filter((p) => sessionSet.has(p.name))
+      : plans
+    return [...filtered].sort((a, b) =>
+      new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
+    )
+  }, [plans, sessionPlanNames])
+
+  // Auto-select: initialPlan > first session plan > most recent plan
+  const effectivePlan = initialPlan
+    ?? (sessionPlanNames.length > 0 ? sessionPlanNames[0] : null)
+    ?? (sortedPlans.length > 0 ? sortedPlans[0].name : null)
+
+  const { content, loading: contentLoading, refresh: refreshContent } = usePlanContent(effectivePlan)
+
+  const toc = useMemo(() => content ? extractToc(content) : [], [content])
+
+  const handleScrollToHeading = useCallback((slug: string) => {
+    if (!contentRef.current) return
+    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4')
+    for (const h of headings) {
+      const hSlug = (h.textContent ?? '').toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-')
+      if (hSlug === slug) {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        break
+      }
+    }
+  }, [])
 
   const handleStartEdit = useCallback(() => {
     setEditContent(content)
@@ -45,10 +90,7 @@ export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs
       await api.updatePlan(effectivePlan, editContent)
       setEditing(false)
       refreshPlans()
-      // Force content refresh by toggling selection
-      const plan = effectivePlan
-      setSelectedPlan(null)
-      setTimeout(() => setSelectedPlan(plan), 0)
+      refreshContent()
     } catch {
       // keep editing on error
     } finally {
@@ -56,53 +98,67 @@ export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs
     }
   }, [effectivePlan, editContent, refreshPlans])
 
-  // Show only session plans (if any), otherwise show all plans
-  const sortedPlans = useMemo(() => {
-    const sessionSet = new Set(sessionPlanNames)
-    const filtered = sessionPlanNames.length > 0
-      ? plans.filter((p) => sessionSet.has(p.name))
-      : plans
-    return [...filtered].sort((a, b) =>
-      new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
-    )
-  }, [plans, sessionPlanNames])
+  const hasHistory = taskEvents.length > 0 || planRefs.length > 0
+  const hasSidebar = toc.length > 0 || hasHistory
 
   return (
     <div style={{ display: 'flex', height: '100%' }}>
-      {/* Plan list */}
-      <div style={{
-        width: 240,
-        flexShrink: 0,
-        borderRight: '1px solid var(--color-border)',
-        overflowY: 'auto',
-      }}>
-        {/* Task progress (if session has tasks) */}
-        <div className="pzl-card-title" style={{ padding: '12px 12px 8px' }}>
-          Plans
+      {/* Sidebar: TOC + Activity history */}
+      {hasSidebar && (
+        <div style={{
+          width: 240,
+          flexShrink: 0,
+          borderRight: '1px solid var(--color-border)',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {toc.length > 0 && (
+            <div style={{ padding: '6px 0' }}>
+              <div className="pzl-card-title" style={{ padding: '2px 12px 4px', fontSize: 9 }}>
+                Outline
+              </div>
+              {toc.map((entry, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleScrollToHeading(entry.slug)}
+                  title={entry.text}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 8px',
+                    paddingLeft: 8 + (entry.level - 1) * 10,
+                    cursor: 'pointer',
+                    fontSize: 10,
+                    lineHeight: 1.3,
+                    fontWeight: entry.level <= 2 ? 600 : 400,
+                    color: entry.level <= 2 ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-bg-tertiary)'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                >
+                  <Hash size={8} style={{ color: 'var(--color-text-muted)', flexShrink: 0, opacity: 0.4 }} />
+                  {entry.text}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {hasHistory && (
+            <>
+              {toc.length > 0 && <div style={{ borderTop: '1px solid var(--color-border)' }} />}
+              <ActivityHistory taskEvents={taskEvents} planRefs={planRefs} />
+            </>
+          )}
         </div>
-
-        {plansLoading ? (
-          <div style={{ padding: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>Loading...</div>
-        ) : (
-          sortedPlans.map((plan) => (
-            <PlanListItem
-              key={plan.name}
-              plan={plan}
-              isSelected={(effectivePlan ?? selectedPlan) === plan.name}
-              isSessionPlan={sessionPlanNames.includes(plan.name)}
-              onSelect={() => setSelectedPlan(plan.name)}
-            />
-          ))
-        )}
-
-        {/* Activity history */}
-        {(taskEvents.length > 0 || planRefs.length > 0) && (
-          <ActivityHistory taskEvents={taskEvents} planRefs={planRefs} />
-        )}
-      </div>
+      )}
 
       {/* Plan content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column' }}>
+      <div ref={contentRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column' }}>
         {/* Edit toolbar */}
         {effectivePlan && content && (
           <div style={{
@@ -199,91 +255,9 @@ export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs
             color: 'var(--color-text-muted)',
             fontSize: 13,
           }}>
-            {plans.length === 0 ? 'No plans found' : 'Select a plan to view'}
+            No plan found for this session
           </div>
         )}
-      </div>
-    </div>
-  )
-}
-
-function PlanListItem({ plan, isSelected, isSessionPlan, onSelect }: {
-  plan: PlanSummary
-  isSelected: boolean
-  isSessionPlan: boolean
-  onSelect: () => void
-}) {
-  const displayName = plan.name
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-
-  return (
-    <div
-      onClick={onSelect}
-      style={{
-        padding: '8px 12px',
-        cursor: 'pointer',
-        borderLeft: isSelected ? '2px solid var(--color-accent)' : '2px solid transparent',
-        background: isSelected ? 'var(--color-bg-secondary)' : 'transparent',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 8,
-      }}
-      onMouseEnter={(e) => {
-        if (!isSelected) e.currentTarget.style.background = 'var(--color-bg-tertiary)'
-      }}
-      onMouseLeave={(e) => {
-        if (!isSelected) e.currentTarget.style.background = 'transparent'
-      }}
-    >
-      <FileText size={13} style={{
-        color: isSessionPlan ? '#859900' : 'var(--color-text-muted)',
-        marginTop: 2,
-        flexShrink: 0,
-      }} strokeWidth={2} />
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: 'var(--color-text-primary)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {displayName}
-        </div>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          marginTop: 2,
-        }}>
-          <Clock size={10} style={{ color: 'var(--color-text-muted)' }} />
-          <span style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            fontWeight: 500,
-            color: 'var(--color-text-muted)',
-          }}>
-            {relativeTime(new Date(plan.modifiedAt).getTime())}
-          </span>
-          {isSessionPlan && (
-            <span style={{
-              fontSize: 9,
-              fontWeight: 600,
-              textTransform: 'uppercase' as const,
-              letterSpacing: '0.05em',
-              color: '#859900',
-              background: '#85990015',
-              padding: '1px 5px',
-              borderRadius: 2,
-            }}>
-              This session
-            </span>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -293,7 +267,6 @@ function ActivityHistory({ taskEvents, planRefs }: {
   taskEvents: TaskEvent[]
   planRefs: PlanReference[]
 }) {
-  // Merge plan refs and task events into a single timeline, sorted chronologically
   type HistoryEntry =
     | { type: 'plan'; ts: string; planName: string; action: string }
     | { type: 'task'; ts: string; taskId: string; event: string; subject: string }
@@ -329,7 +302,7 @@ function ActivityHistory({ taskEvents, planRefs }: {
   }
 
   return (
-    <div style={{ borderTop: '1px solid var(--color-border)', padding: '8px 0' }}>
+    <div style={{ padding: '8px 0' }}>
       <div className="pzl-card-title" style={{ padding: '4px 12px 6px' }}>
         History
       </div>

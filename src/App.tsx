@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { ArrowUp } from 'lucide-react'
 import { useSessions } from './hooks/useSessions.ts'
 import { useConversation } from './hooks/useConversation.ts'
 import { useSSE } from './hooks/useSSE.ts'
@@ -18,6 +19,11 @@ function App() {
   const [focusedToolUseId, setFocusedToolUseId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
+  // Track saved scroll position and "return to" toast
+  const savedScrollPos = useRef<number | null>(null)
+  const [showReturnToast, setShowReturnToast] = useState(false)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const { messages, loading: conversationLoading, refresh: refreshConversation } =
     useConversation(selectedSessionId)
 
@@ -29,16 +35,14 @@ function App() {
   // Extract plan references and tasks from current conversation
   const planRefs = useMemo(() => extractPlanReferences(messages), [messages])
   const sessionPlanNames = useMemo(() => getReferencedPlans(planRefs), [planRefs])
-  const { tasks, events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
+  const { events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
 
   // Scroll to bottom when messages first load after switching sessions
-  // Scroll to bottom when messages load for a new session
   const lastScrolledSession = useRef<string | null>(null)
   useEffect(() => {
     if (!selectedSessionId || conversationLoading || messages.length === 0) return
     if (lastScrolledSession.current === selectedSessionId) return
     lastScrolledSession.current = selectedSessionId
-    // Use setTimeout to wait for React to finish rendering all messages
     setTimeout(() => {
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -61,23 +65,58 @@ function App() {
     ),
   })
 
+  const handleTabChange = useCallback((tab: string) => {
+    // When leaving timeline, save scroll position
+    if (activeTab === 'timeline' && tab !== 'timeline' && scrollRef.current) {
+      savedScrollPos.current = scrollRef.current.scrollTop
+    }
+    // When returning to timeline, scroll to bottom and offer return
+    if (tab === 'timeline' && activeTab !== 'timeline') {
+      const prevPos = savedScrollPos.current
+      setTimeout(() => {
+        if (scrollRef.current) {
+          const wasAtBottom = prevPos !== null &&
+            prevPos + scrollRef.current.clientHeight >= scrollRef.current.scrollHeight - 100
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+          // Only show toast if they were meaningfully scrolled up from bottom
+          if (prevPos !== null && !wasAtBottom) {
+            setShowReturnToast(true)
+            if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+            toastTimerRef.current = setTimeout(() => setShowReturnToast(false), 5000)
+          }
+        }
+      }, 50)
+    }
+    setActiveTab(tab)
+  }, [activeTab])
+
+  const handleReturnToPosition = useCallback(() => {
+    if (scrollRef.current && savedScrollPos.current !== null) {
+      scrollRef.current.scrollTo({ top: savedScrollPos.current, behavior: 'smooth' })
+    }
+    setShowReturnToast(false)
+    savedScrollPos.current = null
+  }, [])
+
   const handleSelectSession = useCallback((sessionId: string) => {
     setSelectedSessionId(sessionId)
     setActiveTab('timeline')
     setFocusedPlan(null)
+    savedScrollPos.current = null
+    setShowReturnToast(false)
   }, [])
 
   // Navigate to plan view (inline, not a separate tab)
   const handleClickPlan = useCallback((planName: string) => {
     setFocusedPlan(planName)
-    setActiveTab('plans')
-  }, [])
+    handleTabChange('plans')
+  }, [handleTabChange])
 
   // Navigate from timeline tool call to diffs tab
   const handleNavigateToTool = useCallback((toolUseId: string) => {
     setFocusedToolUseId(toolUseId)
-    setActiveTab('diffs')
-  }, [])
+    handleTabChange('diffs')
+  }, [handleTabChange])
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -106,11 +145,12 @@ function App() {
         flexDirection: 'column',
         overflow: 'hidden',
         background: 'var(--color-bg-primary)',
+        position: 'relative',
       }}>
         <Header
           session={selectedSession}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
         />
 
         <div ref={scrollRef} style={{
@@ -141,7 +181,6 @@ function App() {
             <PlanViewer
               sessionPlanNames={sessionPlanNames}
               initialPlan={focusedPlan}
-              tasks={tasks}
               taskEvents={taskEvents}
               planRefs={planRefs}
             />
@@ -167,10 +206,39 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Return-to-position toast */}
+        {showReturnToast && (
+          <div
+            onClick={handleReturnToPosition}
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              right: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              background: 'var(--color-bg-secondary)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 11,
+              color: 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              zIndex: 10,
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-text-muted)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--color-border)'}
+          >
+            <ArrowUp size={11} />
+            Return to previous position
+          </div>
+        )}
       </div>
     </div>
   )
 }
-
 
 export default App

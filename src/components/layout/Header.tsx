@@ -10,7 +10,7 @@ interface HeaderProps {
 const tabs = [
   { id: 'timeline', label: 'Timeline' },
   { id: 'diffs', label: 'Files' },
-  { id: 'plans', label: 'Plans' },
+  { id: 'plans', label: 'Plan' },
   { id: 'config', label: 'Settings' },
 ]
 

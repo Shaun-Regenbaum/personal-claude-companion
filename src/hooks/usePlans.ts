@@ -25,6 +25,9 @@ export function usePlans() {
 export function usePlanContent(planName: string | null) {
   const [content, setContent] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   useEffect(() => {
     if (!planName) {
@@ -37,7 +40,7 @@ export function usePlanContent(planName: string | null) {
       .then((data) => setContent(data.content))
       .catch(() => setContent('Failed to load plan'))
       .finally(() => setLoading(false))
-  }, [planName])
+  }, [planName, refreshKey])
 
-  return { content, loading }
+  return { content, loading, refresh }
 }
