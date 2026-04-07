@@ -127,7 +127,6 @@ function App() {
               loading={conversationLoading}
               planRefs={planRefs}
               taskEvents={taskEvents}
-              tasks={tasks}
               onClickPlan={handleClickPlan}
               onNavigateToTool={handleNavigateToTool}
             />
@@ -173,22 +172,5 @@ function App() {
   )
 }
 
-function PlaceholderTab({ name }: { name: string }) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 256,
-      color: 'var(--color-text-muted)',
-      fontSize: 13,
-    }}>
-      <div className="pzl-card" style={{ padding: 32, textAlign: 'center' }}>
-        <div className="pzl-card-title">{name}</div>
-        <div style={{ color: 'var(--color-text-secondary)' }}>Coming in next phase</div>
-      </div>
-    </div>
-  )
-}
 
 export default App

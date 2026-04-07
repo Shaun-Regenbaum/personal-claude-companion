@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { GitBranch, GitCommit as GitCommitIcon } from 'lucide-react'
+import { GitBranch } from 'lucide-react'
 import { api } from '../../lib/api.ts'
 import { relativeTime } from '../../lib/format.ts'
 

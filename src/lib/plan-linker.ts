@@ -115,7 +115,7 @@ export function extractTasks(messages: ConversationMessage[]): {
         const taskNum = parseInt(taskId, 10)
         const taskEntries = Array.from(taskMap.entries())
         if (taskNum > 0 && taskNum <= taskEntries.length) {
-          const [key, task] = taskEntries[taskNum - 1]
+          const [_key, task] = taskEntries[taskNum - 1]
           const newStatus = status as TaskInfo['status']
           task.status = newStatus
           task.taskId = taskId

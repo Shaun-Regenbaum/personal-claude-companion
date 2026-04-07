@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
-import { FileText, Clock, ListChecks, Play, CheckCircle2, Circle, Pencil, X, Save } from 'lucide-react'
+import { FileText, Clock, ListChecks, Play, CheckCircle2, Pencil, X, Save } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { HighlightedCode } from '../timeline/HighlightedCode.tsx'
@@ -17,7 +17,7 @@ interface PlanViewerProps {
   planRefs: PlanReference[]
 }
 
-export function PlanViewer({ sessionPlanNames, initialPlan, tasks, taskEvents, planRefs }: PlanViewerProps) {
+export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs }: PlanViewerProps) {
   const { plans, loading: plansLoading, refresh: refreshPlans } = usePlans()
   const [selectedPlan, setSelectedPlan] = useState<string | null>(initialPlan ?? null)
   const { content, loading: contentLoading } = usePlanContent(selectedPlan)
@@ -97,7 +97,7 @@ export function PlanViewer({ sessionPlanNames, initialPlan, tasks, taskEvents, p
 
         {/* Activity history */}
         {(taskEvents.length > 0 || planRefs.length > 0) && (
-          <ActivityHistory tasks={tasks} taskEvents={taskEvents} planRefs={planRefs} />
+          <ActivityHistory taskEvents={taskEvents} planRefs={planRefs} />
         )}
       </div>
 
@@ -289,8 +289,7 @@ function PlanListItem({ plan, isSelected, isSessionPlan, onSelect }: {
   )
 }
 
-function ActivityHistory({ tasks, taskEvents, planRefs }: {
-  tasks: TaskInfo[]
+function ActivityHistory({ taskEvents, planRefs }: {
   taskEvents: TaskEvent[]
   planRefs: PlanReference[]
 }) {

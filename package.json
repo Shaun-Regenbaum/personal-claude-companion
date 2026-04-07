@@ -6,8 +6,14 @@
   "scripts": {
     "dev": "bun run dev:server & bun run dev:client",
     "dev:client": "vite",
-    "dev:server": "bun --watch server/index.ts",
+    "dev:server": "NODE_ENV=development bun --watch server/index.ts",
     "build": "tsc -b && vite build",
+    "compile": "bun run build && bun build --compile --minify --bytecode --sourcemap --compile-exec-argv='--smol' ./server/index.ts --outfile companion",
+    "start": "bun server/index.ts",
+    "start:prod": "./companion",
+    "stop": "pkill -f 'bun server/index.ts' || pkill -x companion || true",
+    "status": "(pgrep -x companion || pgrep -f 'bun server/index.ts') > /dev/null 2>&1 && echo 'running' || echo 'stopped'",
+    "logs": "tail -f ~/.claude/companion-logs/stdout.log",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest"

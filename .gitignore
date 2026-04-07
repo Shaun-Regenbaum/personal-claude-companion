@@ -1,5 +1,7 @@
 node_modules
 dist
+companion
+companion.debug
 .DS_Store
 *.log
 .env.local
