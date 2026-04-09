@@ -35,27 +35,15 @@ function extractToc(markdown: string): TocEntry[] {
 }
 
 export function PlanViewer({ sessionPlanNames, initialPlan, taskEvents, planRefs }: PlanViewerProps) {
-  const { plans, refresh: refreshPlans } = usePlans()
+  const { refresh: refreshPlans } = usePlans()
   const [editing, setEditing] = useState(false)
   const [editContent, setEditContent] = useState('')
   const [saving, setSaving] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  // Sort plans: session plans first, then by most recent
-  const sortedPlans = useMemo(() => {
-    const sessionSet = new Set(sessionPlanNames)
-    const filtered = sessionPlanNames.length > 0
-      ? plans.filter((p) => sessionSet.has(p.name))
-      : plans
-    return [...filtered].sort((a, b) =>
-      new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime()
-    )
-  }, [plans, sessionPlanNames])
-
-  // Auto-select: initialPlan > first session plan > most recent plan
+  // Auto-select: initialPlan > first session plan
   const effectivePlan = initialPlan
     ?? (sessionPlanNames.length > 0 ? sessionPlanNames[0] : null)
-    ?? (sortedPlans.length > 0 ? sortedPlans[0].name : null)
 
   const { content, loading: contentLoading, refresh: refreshContent } = usePlanContent(effectivePlan)
 
