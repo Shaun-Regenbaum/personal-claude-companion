@@ -10,7 +10,7 @@ import config from './routes/config.ts'
 import git from './routes/git.ts'
 import activity from './routes/activity.ts'
 import summary from './routes/summary.ts'
-import title from './routes/title.ts'
+import title, { startAutoNaming } from './routes/title.ts'
 import { startFileWatcher } from './watch/file-watcher.ts'
 import { startStorageBudget } from './data/storage-budget.ts'
 
@@ -41,6 +41,7 @@ app.get('*', serveStatic({ root: './dist', path: '/index.html' }))
 // Start background services
 startFileWatcher()
 startStorageBudget()
+startAutoNaming()
 
 const port = parseInt(process.env.COMPANION_PORT ?? '3848', 10)
 console.log(`[server] Claude Companion running on http://localhost:${port}`)

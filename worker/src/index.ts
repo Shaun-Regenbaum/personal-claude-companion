@@ -54,11 +54,11 @@ async function handleTitle(request: Request, env: Env): Promise<Response> {
           content: `Generate a short title (3-8 words) for this coding session. The title should describe the main work done, like "Fix Plans Tab Session Isolation" or "Add LaunchAgent Daemon Mode" or "Refactor Auth Middleware".
 
 Return ONLY a JSON object: { "title": "Your Title Here" }
-No markdown fences, no explanation.`,
+No markdown fences, no explanation. Do not think or reason, just output the JSON.`,
         },
         { role: 'user', content: turnLines },
       ],
-      max_tokens: 100,
+      max_tokens: 300,
     })
 
     const raw = result as Record<string, unknown>
@@ -66,21 +66,30 @@ No markdown fences, no explanation.`,
     if (typeof raw.response === 'string') text = raw.response
     else if (typeof raw.result === 'string') text = raw.result
     else if (raw.choices && Array.isArray(raw.choices)) {
-      const choice = (raw.choices as Array<{ message?: { content?: string } }>)[0]
-      text = choice?.message?.content ?? ''
-    } else {
-      text = JSON.stringify(raw)
+      const choice = (raw.choices as Array<{ message?: { content?: string; reasoning?: string } }>)[0]
+      text = choice?.message?.content ?? choice?.message?.reasoning ?? ''
     }
+    if (!text) text = JSON.stringify(raw)
 
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      // Fall back to using the raw text as the title
-      const cleaned = text.replace(/["\n]/g, '').trim().slice(0, 80)
-      return Response.json({ title: cleaned || 'Untitled Session' }, { headers: CORS })
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[0]) as { title: string }
+        const title = String(parsed.title ?? '').slice(0, 80)
+        if (title && title !== 'Untitled Session') {
+          return Response.json({ title }, { headers: CORS })
+        }
+      } catch {}
     }
 
-    const parsed = JSON.parse(jsonMatch[0]) as { title: string }
-    return Response.json({ title: String(parsed.title ?? 'Untitled Session').slice(0, 80) }, { headers: CORS })
+    // Fall back: extract a title-like phrase from the reasoning/text
+    const titleMatch = text.match(/["']([A-Z][^"']{5,60})["']/)
+    if (titleMatch) {
+      return Response.json({ title: titleMatch[1].slice(0, 80) }, { headers: CORS })
+    }
+
+    const cleaned = text.replace(/["\n{}]/g, '').replace(/title:\s*/i, '').trim().slice(0, 80)
+    return Response.json({ title: cleaned || 'Untitled Session' }, { headers: CORS })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     return Response.json({ error: message }, { status: 500, headers: CORS })

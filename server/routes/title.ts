@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
-import { discoverSessions } from '../data/session-discovery.ts'
-import { saveCompanionName } from '../data/session-discovery.ts'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
+import { discoverSessions, saveCompanionName } from '../data/session-discovery.ts'
 import { parseConversation } from '../data/conversation-parser.ts'
 import { getHookTurns } from '../data/activity-reader.ts'
 import { getWorkerUrl, getCfAccessHeaders } from '../data/secrets.ts'
@@ -85,51 +86,73 @@ app.post('/:sessionId', async (c) => {
   }
 })
 
+const NAMES_PATH = join(process.env.HOME ?? '', '.claude', 'companion-names.json')
+
+function loadExistingNames(): Record<string, string> {
+  try {
+    if (existsSync(NAMES_PATH)) {
+      return JSON.parse(readFileSync(NAMES_PATH, 'utf-8'))
+    }
+  } catch {}
+  return {}
+}
+
+async function nameUnnamedSessions(): Promise<{ updated: number }> {
+  if (inFlight.has('batch')) return { updated: 0 }
+  inFlight.add('batch')
+
+  try {
+    const sessions = await discoverSessions()
+    const existing = loadExistingNames()
+    const toProcess = sessions.filter((s) => !existing[s.sessionId])
+
+    if (toProcess.length === 0) return { updated: 0 }
+
+    let updated = 0
+    for (const session of toProcess) {
+      const title = await generateTitle(session.sessionId, session.jsonlPath)
+      if (title) {
+        saveCompanionName(session.sessionId, title)
+        updated++
+        emit({ type: 'session-update', timestamp: new Date().toISOString() })
+        console.log(`[title] auto ${updated}/${toProcess.length}: ${session.sessionId} -> "${title}"`)
+      }
+      // Delay between calls to respect rate limits (20/min)
+      await new Promise((r) => setTimeout(r, 3500))
+    }
+
+    return { updated }
+  } catch (err) {
+    console.error(`[title] auto-naming failed:`, err instanceof Error ? err.message : err)
+    return { updated: 0 }
+  } finally {
+    inFlight.delete('batch')
+  }
+}
+
 // Batch generate titles for all sessions without companion names
 app.post('/batch/all', async (c) => {
   if (inFlight.has('batch')) {
     return c.json({ error: 'Batch already in progress' }, 409)
   }
-  inFlight.add('batch')
 
-  try {
-    const sessions = await discoverSessions()
-
-    // Read current companion names to skip already-named sessions
-    const { readFileSync, existsSync } = await import('fs')
-    const { join } = await import('path')
-    const namesPath = join(process.env.HOME ?? '', '.claude', 'companion-names.json')
-    let existing: Record<string, string> = {}
-    try {
-      if (existsSync(namesPath)) {
-        existing = JSON.parse(readFileSync(namesPath, 'utf-8'))
-      }
-    } catch {}
-
-    const toProcess = sessions.filter((s) => !existing[s.sessionId])
-    const titles: Record<string, string> = {}
-    let updated = 0
-
-    for (const session of toProcess) {
-      const title = await generateTitle(session.sessionId, session.jsonlPath)
-      if (title) {
-        saveCompanionName(session.sessionId, title)
-        titles[session.sessionId] = title
-        updated++
-        emit({ type: 'session-update', timestamp: new Date().toISOString() })
-        console.log(`[title] batch ${updated}/${toProcess.length}: ${session.sessionId} -> "${title}"`)
-      }
-      // Small delay to respect rate limits
-      await new Promise((r) => setTimeout(r, 1500))
-    }
-
-    return c.json({ updated, total: toProcess.length, titles })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return c.json({ error: message }, 500)
-  } finally {
-    inFlight.delete('batch')
-  }
+  const result = await nameUnnamedSessions()
+  return c.json(result)
 })
+
+// Background auto-naming: run on startup after a delay, then periodically
+let autoNamingTimer: ReturnType<typeof setInterval> | null = null
+
+export function startAutoNaming(): void {
+  // Run 30s after startup to let everything initialize
+  setTimeout(() => {
+    nameUnnamedSessions()
+  }, 30_000)
+
+  // Then check every 10 minutes for new unnamed sessions
+  autoNamingTimer = setInterval(() => {
+    nameUnnamedSessions()
+  }, 10 * 60_000)
+}
 
 export default app
