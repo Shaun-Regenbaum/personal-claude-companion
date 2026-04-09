@@ -31,6 +31,23 @@ npx vite --port 3847
 
 Open `http://localhost:3847` in your browser.
 
+## Production (Daemon)
+
+Build, deploy, and restart the LaunchAgent daemon in one command:
+
+```bash
+bun run deploy
+```
+
+This compiles the binary, copies it and the `dist/` assets to `~/.claude/companion/`, and restarts the `com.companion.claude` LaunchAgent.
+
+To check status or view logs:
+
+```bash
+bun run status
+bun run logs
+```
+
 ## Data Sources
 
 All read-only — the companion never writes to any Claude Code data.

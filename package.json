@@ -9,6 +9,7 @@
     "dev:server": "NODE_ENV=development bun --watch server/index.ts",
     "build": "tsc -b && vite build",
     "compile": "bun run build && bun build --compile --minify --bytecode --sourcemap --compile-exec-argv='--smol' ./server/index.ts --outfile companion",
+    "deploy": "bun run compile && cp companion ~/.claude/companion/companion && rm -rf ~/.claude/companion/dist && cp -r dist ~/.claude/companion/dist && launchctl kickstart -k gui/$(id -u)/com.companion.claude",
     "start": "bun server/index.ts",
     "start:prod": "./companion",
     "stop": "pkill -f 'bun server/index.ts' || pkill -x companion || true",
