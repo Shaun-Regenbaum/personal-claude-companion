@@ -20,8 +20,8 @@ interface CompressedTurn {
 
 async function generateTitle(sessionId: string, jsonlPath: string): Promise<string | null> {
   try {
-    const { total, messages } = parseConversation(jsonlPath, 0, 0)
-    if (total === 0) return null
+    const { total } = parseConversation(jsonlPath, 0, 1)
+    if (total < 4) return null // Skip sessions with too few messages
 
     let turns: CompressedTurn[]
     const hookTurns = getHookTurns(sessionId)
@@ -52,7 +52,10 @@ async function generateTitle(sessionId: string, jsonlPath: string): Promise<stri
     if (!res.ok) return null
 
     const data = await res.json() as { title?: string; error?: string }
-    return data.title ?? null
+    const title = data.title
+    // Reject bad titles
+    if (!title || title === 'Untitled Session' || title.length > 60) return null
+    return title
   } catch (err) {
     console.error(`[title] Failed for ${sessionId}:`, err instanceof Error ? err.message : err)
     return null
