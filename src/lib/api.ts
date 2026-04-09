@@ -93,6 +93,21 @@ export const api = {
       error?: string
     }>,
 
+  generateTitle: (sessionId: string) =>
+    fetch(`${API_BASE}/title/${sessionId}`, { method: 'POST' }).then((r) => r.json()) as Promise<{
+      sessionId?: string
+      title?: string
+      error?: string
+    }>,
+
+  generateAllTitles: () =>
+    fetch(`${API_BASE}/title/batch/all`, { method: 'POST' }).then((r) => r.json()) as Promise<{
+      updated?: number
+      total?: number
+      titles?: Record<string, string>
+      error?: string
+    }>,
+
   updatePlan: (name: string, content: string) =>
     fetch(`${API_BASE}/plans/${name}`, {
       method: 'PUT',

@@ -26,6 +26,67 @@ interface SummarySection {
   openQuestions: string[]
 }
 
+async function handleTitle(request: Request, env: Env): Promise<Response> {
+  try {
+    const body = (await request.json()) as { turns: Turn[] }
+
+    if (!body.turns?.length) {
+      return Response.json({ error: 'turns required' }, { status: 400, headers: CORS })
+    }
+
+    // Use first 10 + last 5 turns for context
+    const turns = body.turns
+    const selected = turns.length <= 15
+      ? turns
+      : [...turns.slice(0, 10), ...turns.slice(-5)]
+
+    const turnLines = selected
+      .map(
+        (t, i) =>
+          `Turn ${i + 1} [tools: ${t.tools}]:\nUser: ${t.prompt.slice(0, 300)}\nAssistant: ${t.response.slice(0, 300)}`
+      )
+      .join('\n\n')
+
+    const result = await env.AI.run(MODEL, {
+      messages: [
+        {
+          role: 'system',
+          content: `Generate a short title (3-8 words) for this coding session. The title should describe the main work done, like "Fix Plans Tab Session Isolation" or "Add LaunchAgent Daemon Mode" or "Refactor Auth Middleware".
+
+Return ONLY a JSON object: { "title": "Your Title Here" }
+No markdown fences, no explanation.`,
+        },
+        { role: 'user', content: turnLines },
+      ],
+      max_tokens: 100,
+    })
+
+    const raw = result as Record<string, unknown>
+    let text = ''
+    if (typeof raw.response === 'string') text = raw.response
+    else if (typeof raw.result === 'string') text = raw.result
+    else if (raw.choices && Array.isArray(raw.choices)) {
+      const choice = (raw.choices as Array<{ message?: { content?: string } }>)[0]
+      text = choice?.message?.content ?? ''
+    } else {
+      text = JSON.stringify(raw)
+    }
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      // Fall back to using the raw text as the title
+      const cleaned = text.replace(/["\n]/g, '').trim().slice(0, 80)
+      return Response.json({ title: cleaned || 'Untitled Session' }, { headers: CORS })
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as { title: string }
+    return Response.json({ title: String(parsed.title ?? 'Untitled Session').slice(0, 80) }, { headers: CORS })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return Response.json({ error: message }, { status: 500, headers: CORS })
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -47,6 +108,11 @@ export default {
       count: (rl && now < rl.resetAt ? rl.count : 0) + 1,
       resetAt: now + 60_000,
     })
+
+    const url = new URL(request.url)
+    if (url.pathname === '/title') {
+      return handleTitle(request, env)
+    }
 
     try {
       const body = (await request.json()) as { turns: Turn[] }

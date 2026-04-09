@@ -205,4 +205,4 @@ app.post('/:sessionId', async (c) => {
 })
 
 export default app
-export { compressTurns }
+export { compressTurns, hookTurnsToCompressed }

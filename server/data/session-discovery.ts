@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'fs'
+import { readdirSync, readFileSync, writeFileSync, statSync, existsSync, openSync, readSync, closeSync } from 'fs'
 import { join, basename } from 'path'
 import { isPidAlive } from './session-state.ts'
 import { findDisplayNameForSession, invalidateHistoryCache } from './history-index.ts'
@@ -23,6 +23,14 @@ function loadCompanionNames(): Record<string, string> {
   } catch {}
   return companionNames
 }
+
+export function saveCompanionName(sessionId: string, name: string): void {
+  const current = loadCompanionNames()
+  current[sessionId] = name
+  writeFileSync(COMPANION_NAMES_PATH, JSON.stringify(current, null, 2), 'utf-8')
+  companionNamesMtime = 0 // Invalidate cache so next load picks up the change
+}
+
 const DESKTOP_SESSIONS_DIR = join(
   process.env.HOME ?? '',
   'Library/Application Support/Claude/claude-code-sessions'

@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import { Sparkles } from 'lucide-react'
 import type { Session } from '../../lib/types.ts'
 import { SessionCard } from './SessionCard.tsx'
 import { SessionFilter } from './SessionFilter.tsx'
 import { groupByDay } from '../../lib/format.ts'
+import { api } from '../../lib/api.ts'
 
 interface SessionListProps {
   sessions: Session[]
@@ -14,6 +16,18 @@ interface SessionListProps {
 export function SessionList({ sessions, selectedSessionId, onSelectSession, loading }: SessionListProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [renaming, setRenaming] = useState(false)
+
+  const handleBatchRename = useCallback(async () => {
+    setRenaming(true)
+    try {
+      await api.generateAllTitles()
+    } catch {
+      // SSE events will refresh the list as titles come in
+    } finally {
+      setRenaming(false)
+    }
+  }, [])
 
   const filtered = useMemo(() => {
     let result = sessions
@@ -44,8 +58,32 @@ export function SessionList({ sessions, selectedSessionId, onSelectSession, load
         justifyContent: 'space-between',
       }}>
         <span className="pzl-section-title" style={{ fontSize: 12 }}>Sessions</span>
-        <span className="pzl-label" style={{ fontSize: 10 }}>
-          {activeCount} active / {sessions.length}
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={handleBatchRename}
+            disabled={renaming}
+            title="Generate AI titles for all sessions"
+            style={{
+              background: 'none',
+              border: '1px solid var(--color-border)',
+              borderRadius: 4,
+              padding: '2px 5px',
+              cursor: renaming ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 10,
+              color: renaming ? 'var(--color-text-muted)' : 'var(--color-text-secondary)',
+              fontFamily: 'var(--font-mono)',
+              opacity: renaming ? 0.6 : 1,
+            }}
+          >
+            <Sparkles size={10} />
+            {renaming ? 'Naming...' : 'Name'}
+          </button>
+          <span className="pzl-label" style={{ fontSize: 10 }}>
+            {activeCount} active / {sessions.length}
+          </span>
         </span>
       </div>
 

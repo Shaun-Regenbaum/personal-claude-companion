@@ -10,6 +10,7 @@ import config from './routes/config.ts'
 import git from './routes/git.ts'
 import activity from './routes/activity.ts'
 import summary from './routes/summary.ts'
+import title from './routes/title.ts'
 import { startFileWatcher } from './watch/file-watcher.ts'
 import { startStorageBudget } from './data/storage-budget.ts'
 
@@ -29,6 +30,7 @@ app.route('/api/config', config)
 app.route('/api/git', git)
 app.route('/api/activity', activity)
 app.route('/api/summary', summary)
+app.route('/api/title', title)
 
 app.get('/api/health', (c) => c.json({ ok: true, timestamp: new Date().toISOString() }))
 
