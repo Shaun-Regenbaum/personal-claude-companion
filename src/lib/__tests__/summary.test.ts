@@ -144,6 +144,67 @@ describe('compressTurns', () => {
   })
 })
 
+// Title validation logic (mirrors server/routes/title.ts filtering)
+function isValidTitle(title: string | null | undefined): boolean {
+  if (!title) return false
+  if (title === 'Untitled Session') return false
+  if (title.length > 60) return false
+  return true
+}
+
+describe('title validation', () => {
+  it('rejects null/undefined/empty titles', () => {
+    expect(isValidTitle(null)).toBe(false)
+    expect(isValidTitle(undefined)).toBe(false)
+    expect(isValidTitle('')).toBe(false)
+  })
+
+  it('rejects "Untitled Session"', () => {
+    expect(isValidTitle('Untitled Session')).toBe(false)
+  })
+
+  it('rejects titles longer than 60 characters', () => {
+    expect(isValidTitle('A'.repeat(61))).toBe(false)
+    expect(isValidTitle('Now I have a clear picture. Let me write up the plan for this session')).toBe(false)
+  })
+
+  it('accepts valid short descriptive titles', () => {
+    expect(isValidTitle('Fix Plans Tab Session Isolation')).toBe(true)
+    expect(isValidTitle('Add LaunchAgent Daemon Mode')).toBe(true)
+    expect(isValidTitle('Refactor Auth Middleware')).toBe(true)
+    expect(isValidTitle('Setup React Vite Dashboard with Auth0')).toBe(true)
+  })
+
+  it('accepts titles at exactly 60 characters', () => {
+    expect(isValidTitle('A'.repeat(60))).toBe(true)
+  })
+})
+
+describe('title response parsing', () => {
+  it('extracts title from valid JSON response', () => {
+    const text = '{ "title": "Fix Plans Tab Session Isolation" }'
+    const match = text.match(/\{[\s\S]*\}/)
+    expect(match).not.toBeNull()
+    const parsed = JSON.parse(match![0]) as { title: string }
+    expect(parsed.title).toBe('Fix Plans Tab Session Isolation')
+  })
+
+  it('extracts title from JSON embedded in reasoning text', () => {
+    const text = 'The session is about fixing bugs. { "title": "Fix PlanViewer Bug" } That is my answer.'
+    const match = text.match(/\{[\s\S]*\}/)
+    expect(match).not.toBeNull()
+    const parsed = JSON.parse(match![0]) as { title: string }
+    expect(parsed.title).toBe('Fix PlanViewer Bug')
+  })
+
+  it('falls back to quoted title extraction when no JSON', () => {
+    const text = 'I think the title should be "Fix Plans Tab Session Isolation"'
+    const titleMatch = text.match(/["']([A-Z][^"']{5,60})["']/)
+    expect(titleMatch).not.toBeNull()
+    expect(titleMatch![1]).toBe('Fix Plans Tab Session Isolation')
+  })
+})
+
 describe('summary response parsing', () => {
   it('parses valid section response', () => {
     const response = {
