@@ -14,7 +14,7 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
 
   const copyResumeCommand = (e: React.MouseEvent) => {
     e.stopPropagation()
-    navigator.clipboard.writeText(`claude --resume ${session.sessionId}`)
+    navigator.clipboard.writeText(`cd ${session.cwd} && claude --resume ${session.sessionId}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
