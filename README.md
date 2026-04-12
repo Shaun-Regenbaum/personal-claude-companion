@@ -39,7 +39,9 @@ Build, deploy, and restart the LaunchAgent daemon in one command:
 bun run deploy
 ```
 
-This compiles the binary, copies it and the `dist/` assets to `~/.claude/companion/`, and restarts the `com.companion.claude` LaunchAgent.
+This runs `bun run compile` (which does `tsc -b && vite build` then `bun build --compile` to produce a standalone `companion` binary), copies it and the `dist/` assets to `~/.claude/companion/`, and restarts the `com.companion.claude` LaunchAgent.
+
+**Important**: After any code change, you must run `bun run deploy` to compile and deploy the new binary. The running daemon serves from `~/.claude/companion/`, not from this source directory. `npm run build` / `vite build` alone is not sufficient — the daemon runs the compiled Bun binary.
 
 To check status or view logs:
 
