@@ -11,6 +11,7 @@ export interface Session {
   messageCount: number
   gitBranch?: string
   version?: string
+  isPinned?: boolean
 }
 
 export interface ConversationMessage {

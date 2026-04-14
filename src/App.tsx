@@ -134,6 +134,7 @@ function App() {
           sessions={sessions}
           selectedSessionId={selectedSessionId}
           onSelectSession={handleSelectSession}
+          onRefresh={refreshSessions}
           loading={sessionsLoading}
         />
       </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Terminal, Monitor, Copy, Check } from 'lucide-react'
+import { Terminal, Monitor, Copy, Check, Pin, PinOff } from 'lucide-react'
 import type { Session } from '../../lib/types.ts'
 import { relativeTimeShort, truncate } from '../../lib/format.ts'
 
@@ -7,9 +7,10 @@ interface SessionCardProps {
   session: Session
   isSelected: boolean
   onSelect: (sessionId: string) => void
+  onTogglePin?: (sessionId: string, pinned: boolean) => void
 }
 
-export function SessionCard({ session, isSelected, onSelect }: SessionCardProps) {
+export function SessionCard({ session, isSelected, onSelect, onTogglePin }: SessionCardProps) {
   const [copied, setCopied] = useState(false)
 
   const copyResumeCommand = (e: React.MouseEvent) => {
@@ -17,6 +18,11 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
     navigator.clipboard.writeText(`cd ${session.cwd} && claude --resume ${session.sessionId}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  const togglePin = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onTogglePin?.(session.sessionId, !session.isPinned)
   }
 
   const Icon = session.entrypoint === 'desktop' ? Monitor : Terminal
@@ -69,6 +75,14 @@ export function SessionCard({ session, isSelected, onSelect }: SessionCardProps)
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500, color: 'var(--color-text-muted)', flexShrink: 0 }}>
         {relativeTimeShort(session.lastActivityAt)}
       </span>
+
+      <button onClick={togglePin} style={{
+        background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+        color: session.isPinned ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        flexShrink: 0, display: 'flex', opacity: session.isPinned ? 1 : 0.5,
+      }} title={session.isPinned ? 'Unpin session' : 'Pin session'}>
+        {session.isPinned ? <PinOff size={13} /> : <Pin size={13} />}
+      </button>
 
       {!session.isActive && (
         <button onClick={copyResumeCommand} style={{

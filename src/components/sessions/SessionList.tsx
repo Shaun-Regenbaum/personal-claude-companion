@@ -10,10 +10,11 @@ interface SessionListProps {
   sessions: Session[]
   selectedSessionId: string | null
   onSelectSession: (sessionId: string) => void
+  onRefresh: () => void
   loading: boolean
 }
 
-export function SessionList({ sessions, selectedSessionId, onSelectSession, loading }: SessionListProps) {
+export function SessionList({ sessions, selectedSessionId, onSelectSession, onRefresh, loading }: SessionListProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [renaming, setRenaming] = useState(false)
@@ -28,6 +29,19 @@ export function SessionList({ sessions, selectedSessionId, onSelectSession, load
       setRenaming(false)
     }
   }, [])
+
+  const handleTogglePin = useCallback(async (sessionId: string, pinned: boolean) => {
+    try {
+      if (pinned) {
+        await api.pinSession(sessionId)
+      } else {
+        await api.unpinSession(sessionId)
+      }
+      onRefresh()
+    } catch {
+      // Silently fail
+    }
+  }, [onRefresh])
 
   const filtered = useMemo(() => {
     let result = sessions
@@ -45,7 +59,9 @@ export function SessionList({ sessions, selectedSessionId, onSelectSession, load
     return result
   }, [sessions, search, statusFilter])
 
-  const groups = useMemo(() => groupByDay(filtered), [filtered])
+  const pinned = useMemo(() => filtered.filter((s) => s.isPinned), [filtered])
+  const unpinned = useMemo(() => filtered.filter((s) => !s.isPinned), [filtered])
+  const groups = useMemo(() => groupByDay(unpinned), [unpinned])
   const activeCount = sessions.filter((s) => s.isActive).length
 
   return (
@@ -106,26 +122,51 @@ export function SessionList({ sessions, selectedSessionId, onSelectSession, load
             No sessions found
           </div>
         ) : (
-          Array.from(groups.entries()).map(([label, items]) => (
-            <div key={label}>
-              <div className="pzl-label" style={{
-                padding: '8px 12px 2px',
-                fontSize: 10,
-                borderBottom: '1px solid var(--color-border)',
-                marginBottom: 2,
-              }}>
-                {label}
+          <>
+            {pinned.length > 0 && (
+              <div key="Pinned">
+                <div className="pzl-label" style={{
+                  padding: '8px 12px 2px',
+                  fontSize: 10,
+                  borderBottom: '1px solid var(--color-border)',
+                  marginBottom: 2,
+                  color: 'var(--color-accent)',
+                }}>
+                  Pinned
+                </div>
+                {pinned.map((session) => (
+                  <SessionCard
+                    key={session.sessionId}
+                    session={session as Session}
+                    isSelected={selectedSessionId === session.sessionId}
+                    onSelect={onSelectSession}
+                    onTogglePin={handleTogglePin}
+                  />
+                ))}
               </div>
-              {items.map((session) => (
-                <SessionCard
-                  key={session.sessionId}
-                  session={session as Session}
-                  isSelected={selectedSessionId === session.sessionId}
-                  onSelect={onSelectSession}
-                />
-              ))}
-            </div>
-          ))
+            )}
+            {Array.from(groups.entries()).map(([label, items]) => (
+              <div key={label}>
+                <div className="pzl-label" style={{
+                  padding: '8px 12px 2px',
+                  fontSize: 10,
+                  borderBottom: '1px solid var(--color-border)',
+                  marginBottom: 2,
+                }}>
+                  {label}
+                </div>
+                {items.map((session) => (
+                  <SessionCard
+                    key={session.sessionId}
+                    session={session as Session}
+                    isSelected={selectedSessionId === session.sessionId}
+                    onSelect={onSelectSession}
+                    onTogglePin={handleTogglePin}
+                  />
+                ))}
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>

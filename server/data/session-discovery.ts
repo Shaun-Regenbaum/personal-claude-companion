@@ -7,6 +7,7 @@ const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
 const SESSIONS_DIR = join(CLAUDE_DIR, 'sessions')
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects')
 const COMPANION_NAMES_PATH = join(CLAUDE_DIR, 'companion-names.json')
+const COMPANION_PINS_PATH = join(CLAUDE_DIR, 'companion-pins.json')
 
 // Companion-managed session names (highest priority)
 let companionNames: Record<string, string> = {}
@@ -29,6 +30,41 @@ export function saveCompanionName(sessionId: string, name: string): void {
   current[sessionId] = name
   writeFileSync(COMPANION_NAMES_PATH, JSON.stringify(current, null, 2), 'utf-8')
   companionNamesMtime = 0 // Invalidate cache so next load picks up the change
+}
+
+// Companion-managed pinned sessions
+let companionPins: string[] = []
+let companionPinsMtime = 0
+
+export function loadCompanionPins(): string[] {
+  try {
+    if (!existsSync(COMPANION_PINS_PATH)) return companionPins
+    const stat = statSync(COMPANION_PINS_PATH)
+    if (stat.mtimeMs !== companionPinsMtime) {
+      companionPins = JSON.parse(readFileSync(COMPANION_PINS_PATH, 'utf-8'))
+      companionPinsMtime = stat.mtimeMs
+    }
+  } catch {}
+  return companionPins
+}
+
+export function pinSession(sessionId: string): void {
+  const current = loadCompanionPins()
+  if (!current.includes(sessionId)) {
+    current.push(sessionId)
+    writeFileSync(COMPANION_PINS_PATH, JSON.stringify(current, null, 2), 'utf-8')
+    companionPinsMtime = 0
+  }
+}
+
+export function unpinSession(sessionId: string): void {
+  const current = loadCompanionPins()
+  const idx = current.indexOf(sessionId)
+  if (idx !== -1) {
+    current.splice(idx, 1)
+    writeFileSync(COMPANION_PINS_PATH, JSON.stringify(current, null, 2), 'utf-8')
+    companionPinsMtime = 0
+  }
 }
 
 const DESKTOP_SESSIONS_DIR = join(
@@ -59,6 +95,7 @@ interface DiscoveredSession {
   messageCount: number
   gitBranch?: string
   version?: string
+  isPinned: boolean
   jsonlPath: string
 }
 
@@ -158,6 +195,7 @@ function scanProjectsDir(
           messageCount,
           gitBranch,
           version,
+          isPinned: loadCompanionPins().includes(sessionId),
           jsonlPath,
         })
       } catch {
@@ -198,6 +236,7 @@ function scanDesktopSessions(
           messageCount,
           gitBranch,
           version,
+          isPinned: loadCompanionPins().includes(sessionId),
           jsonlPath,
         })
       } catch {

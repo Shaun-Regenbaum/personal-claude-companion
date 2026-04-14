@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { discoverSessions } from '../data/session-discovery.ts'
+import { discoverSessions, pinSession, unpinSession, invalidateSessionCache } from '../data/session-discovery.ts'
 
 const app = new Hono()
 
@@ -25,6 +25,20 @@ app.get('/:sessionId', async (c) => {
   const session = sessions.find((s) => s.sessionId === sessionId)
   if (!session) return c.json({ error: 'Session not found' }, 404)
   return c.json({ session })
+})
+
+app.put('/:sessionId/pin', async (c) => {
+  const sessionId = c.req.param('sessionId')
+  pinSession(sessionId)
+  invalidateSessionCache()
+  return c.json({ ok: true })
+})
+
+app.delete('/:sessionId/pin', async (c) => {
+  const sessionId = c.req.param('sessionId')
+  unpinSession(sessionId)
+  invalidateSessionCache()
+  return c.json({ ok: true })
 })
 
 export default app

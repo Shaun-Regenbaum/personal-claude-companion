@@ -114,4 +114,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
     }).then((r) => r.json()) as Promise<{ name: string; modifiedAt: string }>,
+
+  pinSession: (sessionId: string) =>
+    fetch(`${API_BASE}/sessions/${sessionId}/pin`, { method: 'PUT' }).then((r) => r.json()) as Promise<{ ok: boolean }>,
+
+  unpinSession: (sessionId: string) =>
+    fetch(`${API_BASE}/sessions/${sessionId}/pin`, { method: 'DELETE' }).then((r) => r.json()) as Promise<{ ok: boolean }>,
 }
