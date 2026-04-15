@@ -11,13 +11,24 @@ import type { FileOperation } from '../../lib/types.ts'
 interface SummaryViewProps {
   sessionId: string
   onNavigateToTool?: (toolUseId: string) => void
+  onClickPlan?: (planName: string) => void
 }
+
+type ArtifactAction = 'file' | 'plan' | 'browser'
 
 interface Artifact {
   label: string
   filePath: string
   toolUseId: string
   timestamp: string
+  action: ArtifactAction
+  planName?: string
+}
+
+function getArtifactAction(filePath: string): ArtifactAction {
+  if (filePath.includes('/.claude/plans/')) return 'plan'
+  if (filePath.endsWith('.html') || filePath.endsWith('.htm')) return 'browser'
+  return 'file'
 }
 
 function extractArtifacts(operations: FileOperation[]): Artifact[] {
@@ -30,13 +41,17 @@ function extractArtifacts(operations: FileOperation[]): Artifact[] {
 
     const isMd = path.endsWith('.md') || path.endsWith('.mdx')
     const isPlan = path.includes('/.claude/plans/')
+    const isHtml = path.endsWith('.html') || path.endsWith('.htm')
     const isLargeWrite = op.toolName === 'Write' && op.content && op.content.length > 500
 
-    if (!isMd && !isPlan && !isLargeWrite) continue
+    if (!isMd && !isPlan && !isHtml && !isLargeWrite) continue
 
     const basename = path.split('/').pop() ?? path
     let label = basename
     if (isPlan) label = `Plan: ${basename}`
+
+    const action = getArtifactAction(path)
+    const planName = isPlan ? basename.replace(/\.md$/, '') : undefined
 
     // Keep the most recent operation per file path
     const existing = seen.get(path)
@@ -46,6 +61,8 @@ function extractArtifacts(operations: FileOperation[]): Artifact[] {
         filePath: path,
         toolUseId: op.toolUseId,
         timestamp: op.timestamp,
+        action,
+        planName,
       })
     }
   }
@@ -54,7 +71,7 @@ function extractArtifacts(operations: FileOperation[]): Artifact[] {
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 }
 
-export function SummaryView({ sessionId, onNavigateToTool }: SummaryViewProps) {
+export function SummaryView({ sessionId, onNavigateToTool, onClickPlan }: SummaryViewProps) {
   const { sections, loading, generating, error, fetched, fetchSummary } = useSummary(sessionId)
   const { operations } = useOperations(sessionId)
 
@@ -76,16 +93,18 @@ export function SummaryView({ sessionId, onNavigateToTool }: SummaryViewProps) {
         onRetry={fetchSummary}
         artifacts={artifacts}
         onNavigateToTool={onNavigateToTool}
+        onClickPlan={onClickPlan}
       />
     </div>
   )
 }
 
-function ArtifactsList({ artifacts, onNavigateToTool }: {
+function ArtifactsList({ artifacts, onNavigateToTool, onClickPlan }: {
   artifacts: Artifact[]
   onNavigateToTool?: (toolUseId: string) => void
+  onClickPlan?: (planName: string) => void
 }) {
-  if (artifacts.length === 0 || !onNavigateToTool) return null
+  if (artifacts.length === 0) return null
 
   return (
     <div style={{
@@ -115,7 +134,15 @@ function ArtifactsList({ artifacts, onNavigateToTool }: {
       {artifacts.map((artifact) => (
         <button
           key={artifact.toolUseId}
-          onClick={() => onNavigateToTool(artifact.toolUseId)}
+          onClick={() => {
+            if (artifact.action === 'plan' && artifact.planName && onClickPlan) {
+              onClickPlan(artifact.planName)
+            } else if (artifact.action === 'browser') {
+              window.open(`file://${artifact.filePath}`, '_blank')
+            } else if (onNavigateToTool) {
+              onNavigateToTool(artifact.toolUseId)
+            }
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -149,7 +176,7 @@ function ArtifactsList({ artifacts, onNavigateToTool }: {
   )
 }
 
-function AISummaryView({ sections, loading, generating, error, onRetry, artifacts, onNavigateToTool }: {
+function AISummaryView({ sections, loading, generating, error, onRetry, artifacts, onNavigateToTool, onClickPlan }: {
   sections: SummarySection[]
   loading: boolean
   generating: boolean
@@ -157,6 +184,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
   onRetry: () => void
   artifacts: Artifact[]
   onNavigateToTool?: (toolUseId: string) => void
+  onClickPlan?: (planName: string) => void
 }) {
   if (loading) {
     return (
@@ -210,7 +238,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
   if (sections.length === 0 && generating) {
     return (
       <>
-        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
+        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -230,7 +258,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
   if (sections.length === 0) {
     return (
       <>
-        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
+        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -247,7 +275,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
 
   return (
     <div style={{ padding: '8px 24px 24px' }}>
-      <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
+      <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
       {generating && sections.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0 8px',

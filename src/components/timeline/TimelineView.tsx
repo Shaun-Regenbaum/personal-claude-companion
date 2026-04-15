@@ -144,10 +144,10 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
 
       {/* Content */}
       {mode === 'summary' ? (
-        <SummaryView sessionId={sessionId} onNavigateToTool={onNavigateToTool} />
+        <SummaryView sessionId={sessionId} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
       ) : (
         <div style={{ padding: '8px 24px 24px' }}>
-          {displayMessages.map((msg, i) => {
+          {[...displayMessages].reverse().map((msg, i) => {
             const planRef = planRefsByUuid.get(msg.uuid)
             const taskEvts = taskEventsByUuid.get(msg.uuid)
             return (

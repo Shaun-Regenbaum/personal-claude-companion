@@ -4,6 +4,7 @@ import { emit } from './event-bus.ts'
 import { invalidateSessionCache } from '../data/session-discovery.ts'
 import { invalidateConversationCache } from '../data/conversation-parser.ts'
 import { invalidateActivityCache } from '../data/activity-reader.ts'
+import { onConversationChanged } from '../routes/summary.ts'
 
 const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
 
@@ -52,6 +53,8 @@ export function startFileWatcher(): void {
           sessionId,
           timestamp: new Date().toISOString(),
         })
+        // Trigger debounced summary refresh for this session
+        if (sessionId) onConversationChanged(sessionId)
       })
     }
   })

@@ -37,17 +37,15 @@ function App() {
   const sessionPlanNames = useMemo(() => getReferencedPlans(planRefs), [planRefs])
   const { events: taskEvents } = useMemo(() => extractTasks(messages), [messages])
 
-  // Scroll to bottom when messages first load after switching sessions
+  // Scroll to top when switching sessions (latest messages are at top now)
   const lastScrolledSession = useRef<string | null>(null)
   useEffect(() => {
     if (!selectedSessionId || conversationLoading || messages.length === 0) return
     if (lastScrolledSession.current === selectedSessionId) return
     lastScrolledSession.current = selectedSessionId
-    setTimeout(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      }
-    }, 100)
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
   }, [selectedSessionId, conversationLoading, messages.length])
 
   useSSE({
@@ -70,20 +68,15 @@ function App() {
     if (activeTab === 'timeline' && tab !== 'timeline' && scrollRef.current) {
       savedScrollPos.current = scrollRef.current.scrollTop
     }
-    // When returning to timeline, scroll to bottom and offer return
+    // When returning to timeline, restore saved position or stay at top
     if (tab === 'timeline' && activeTab !== 'timeline') {
       const prevPos = savedScrollPos.current
       setTimeout(() => {
-        if (scrollRef.current) {
-          const wasAtBottom = prevPos !== null &&
-            prevPos + scrollRef.current.clientHeight >= scrollRef.current.scrollHeight - 100
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-          // Only show toast if they were meaningfully scrolled up from bottom
-          if (prevPos !== null && !wasAtBottom) {
-            setShowReturnToast(true)
-            if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
-            toastTimerRef.current = setTimeout(() => setShowReturnToast(false), 5000)
-          }
+        if (scrollRef.current && prevPos !== null && prevPos > 0) {
+          scrollRef.current.scrollTop = prevPos
+          setShowReturnToast(true)
+          if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+          toastTimerRef.current = setTimeout(() => setShowReturnToast(false), 5000)
         }
       }, 50)
     }

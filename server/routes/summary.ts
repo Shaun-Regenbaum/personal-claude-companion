@@ -247,5 +247,19 @@ export function startAutoSummaries(): void {
   }, 10 * 60_000)
 }
 
+// Debounced per-session refresh triggered by conversation file changes
+const conversationDebounce = new Map<string, ReturnType<typeof setTimeout>>()
+
+export function onConversationChanged(sessionId: string): void {
+  const existing = conversationDebounce.get(sessionId)
+  if (existing) clearTimeout(existing)
+
+  // Wait 30s after last change before regenerating (avoids thrashing during active use)
+  conversationDebounce.set(sessionId, setTimeout(() => {
+    conversationDebounce.delete(sessionId)
+    generateSummary(sessionId)
+  }, 30_000))
+}
+
 export default app
 export { compressTurns, hookTurnsToCompressed }
