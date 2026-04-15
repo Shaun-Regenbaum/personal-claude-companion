@@ -19,7 +19,7 @@ interface TimelineViewProps {
 }
 
 export function TimelineView({ sessionId, messages, loading, planRefs, taskEvents, onClickPlan, onNavigateToTool }: TimelineViewProps) {
-  const [mode, setMode] = useState<'full' | 'summary'>('full')
+  const [mode, setMode] = useState<'full' | 'summary'>('summary')
 
   const toolResults = useMemo(() => {
     const map = new Map<string, string>()
@@ -126,25 +126,25 @@ export function TimelineView({ sessionId, messages, loading, planRefs, taskEvent
 
         <div className="pzl-tabs" style={{ padding: 2 }}>
           <button
-            onClick={() => setMode('full')}
-            className={`pzl-tab ${mode === 'full' ? 'pzl-tab-active' : ''}`}
-            style={{ fontSize: 10, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
-          >
-            <List size={11} strokeWidth={2} /> Full
-          </button>
-          <button
             onClick={() => setMode('summary')}
             className={`pzl-tab ${mode === 'summary' ? 'pzl-tab-active' : ''}`}
             style={{ fontSize: 10, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
           >
             <Layers size={11} strokeWidth={2} /> Summary
           </button>
+          <button
+            onClick={() => setMode('full')}
+            className={`pzl-tab ${mode === 'full' ? 'pzl-tab-active' : ''}`}
+            style={{ fontSize: 10, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <List size={11} strokeWidth={2} /> Full
+          </button>
         </div>
       </div>
 
       {/* Content */}
       {mode === 'summary' ? (
-        <SummaryView sessionId={sessionId} />
+        <SummaryView sessionId={sessionId} onNavigateToTool={onNavigateToTool} />
       ) : (
         <div style={{ padding: '8px 24px 24px' }}>
           {displayMessages.map((msg, i) => {

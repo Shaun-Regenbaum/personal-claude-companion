@@ -1,16 +1,64 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   CheckCircle2, HelpCircle, Lightbulb, Loader2, AlertTriangle,
+  FileText, ExternalLink,
 } from 'lucide-react'
 import type { SummarySection } from '../../hooks/useSummary.ts'
 import { useSummary } from '../../hooks/useSummary.ts'
+import { useOperations } from '../../hooks/useOperations.ts'
+import type { FileOperation } from '../../lib/types.ts'
 
 interface SummaryViewProps {
   sessionId: string
+  onNavigateToTool?: (toolUseId: string) => void
 }
 
-export function SummaryView({ sessionId }: SummaryViewProps) {
+interface Artifact {
+  label: string
+  filePath: string
+  toolUseId: string
+  timestamp: string
+}
+
+function extractArtifacts(operations: FileOperation[]): Artifact[] {
+  const seen = new Map<string, Artifact>()
+
+  for (const op of operations) {
+    if (op.toolName !== 'Write' && op.toolName !== 'Edit') continue
+    const path = op.filePath
+    if (!path) continue
+
+    const isMd = path.endsWith('.md') || path.endsWith('.mdx')
+    const isPlan = path.includes('/.claude/plans/')
+    const isLargeWrite = op.toolName === 'Write' && op.content && op.content.length > 500
+
+    if (!isMd && !isPlan && !isLargeWrite) continue
+
+    const basename = path.split('/').pop() ?? path
+    let label = basename
+    if (isPlan) label = `Plan: ${basename}`
+
+    // Keep the most recent operation per file path
+    const existing = seen.get(path)
+    if (!existing || op.timestamp > existing.timestamp) {
+      seen.set(path, {
+        label,
+        filePath: path,
+        toolUseId: op.toolUseId,
+        timestamp: op.timestamp,
+      })
+    }
+  }
+
+  return Array.from(seen.values())
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+}
+
+export function SummaryView({ sessionId, onNavigateToTool }: SummaryViewProps) {
   const { sections, loading, generating, error, fetched, fetchSummary } = useSummary(sessionId)
+  const { operations } = useOperations(sessionId)
+
+  const artifacts = useMemo(() => extractArtifacts(operations), [operations])
 
   useEffect(() => {
     if (!fetched && !loading) {
@@ -26,17 +74,89 @@ export function SummaryView({ sessionId }: SummaryViewProps) {
         generating={generating}
         error={error}
         onRetry={fetchSummary}
+        artifacts={artifacts}
+        onNavigateToTool={onNavigateToTool}
       />
     </div>
   )
 }
 
-function AISummaryView({ sections, loading, generating, error, onRetry }: {
+function ArtifactsList({ artifacts, onNavigateToTool }: {
+  artifacts: Artifact[]
+  onNavigateToTool?: (toolUseId: string) => void
+}) {
+  if (artifacts.length === 0 || !onNavigateToTool) return null
+
+  return (
+    <div style={{
+      margin: '0 24px 12px',
+      padding: '10px 14px',
+      background: 'var(--color-bg-secondary)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 6,
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 5,
+        marginBottom: 8,
+      }}>
+        <FileText size={11} strokeWidth={2} style={{ color: 'var(--color-text-muted)' }} />
+        <span style={{
+          fontSize: 10,
+          fontWeight: 600,
+          textTransform: 'uppercase' as const,
+          letterSpacing: '0.05em',
+          color: 'var(--color-text-muted)',
+        }}>
+          Artifacts
+        </span>
+      </div>
+      {artifacts.map((artifact) => (
+        <button
+          key={artifact.toolUseId}
+          onClick={() => onNavigateToTool(artifact.toolUseId)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            width: '100%',
+            padding: '5px 8px',
+            marginBottom: 2,
+            background: 'none',
+            border: 'none',
+            borderRadius: 4,
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--color-text-secondary)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--color-bg-tertiary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'none'
+          }}
+        >
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {artifact.label}
+          </span>
+          <ExternalLink size={10} style={{ flexShrink: 0, opacity: 0.5 }} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function AISummaryView({ sections, loading, generating, error, onRetry, artifacts, onNavigateToTool }: {
   sections: SummarySection[]
   loading: boolean
   generating: boolean
   error: string | null
   onRetry: () => void
+  artifacts: Artifact[]
+  onNavigateToTool?: (toolUseId: string) => void
 }) {
   if (loading) {
     return (
@@ -89,38 +209,45 @@ function AISummaryView({ sections, loading, generating, error, onRetry }: {
 
   if (sections.length === 0 && generating) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 200,
-        gap: 12,
-        color: 'var(--color-text-muted)',
-      }}>
-        <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
-        <span style={{ fontSize: 12 }}>Generating summary...</span>
-      </div>
+      <>
+        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 200,
+          gap: 12,
+          color: 'var(--color-text-muted)',
+        }}>
+          <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 12 }}>Generating summary...</span>
+        </div>
+      </>
     )
   }
 
   if (sections.length === 0) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 200,
-        color: 'var(--color-text-muted)',
-        fontSize: 12,
-      }}>
-        No summary available
-      </div>
+      <>
+        <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 200,
+          color: 'var(--color-text-muted)',
+          fontSize: 12,
+        }}>
+          No summary available
+        </div>
+      </>
     )
   }
 
   return (
     <div style={{ padding: '8px 24px 24px' }}>
+      <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} />
       {generating && sections.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0 8px',
@@ -243,4 +370,3 @@ function DetailList({ icon: Icon, iconColor, label, items }: {
     </div>
   )
 }
-
