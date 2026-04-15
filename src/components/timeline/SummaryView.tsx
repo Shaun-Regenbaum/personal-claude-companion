@@ -108,10 +108,10 @@ function ArtifactsList({ artifacts, onNavigateToTool, onClickPlan }: {
 
   return (
     <div style={{
-      margin: '0 24px 12px',
+      marginBottom: 16,
       padding: '10px 14px',
-      background: 'var(--color-bg-secondary)',
-      border: '1px solid var(--color-border)',
+      background: 'var(--color-bg-primary)',
+      border: '1px dashed var(--color-border)',
       borderRadius: 6,
     }}>
       <div style={{
@@ -237,7 +237,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
 
   if (sections.length === 0 && generating) {
     return (
-      <>
+      <div style={{ padding: '8px 24px 24px' }}>
         <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
         <div style={{
           display: 'flex',
@@ -251,13 +251,13 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
           <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
           <span style={{ fontSize: 12 }}>Generating summary...</span>
         </div>
-      </>
+      </div>
     )
   }
 
   if (sections.length === 0) {
     return (
-      <>
+      <div style={{ padding: '8px 24px 24px' }}>
         <ArtifactsList artifacts={artifacts} onNavigateToTool={onNavigateToTool} onClickPlan={onClickPlan} />
         <div style={{
           display: 'flex',
@@ -269,7 +269,7 @@ function AISummaryView({ sections, loading, generating, error, onRetry, artifact
         }}>
           No summary available
         </div>
-      </>
+      </div>
     )
   }
 
