@@ -206,5 +206,46 @@ app.post('/:sessionId', async (c) => {
   }
 })
 
+async function refreshSummaries(): Promise<void> {
+  try {
+    const sessions = await discoverSessions()
+    // Sort by most recently modified, take top 20
+    const recent = sessions
+      .sort((a, b) => b.lastModified - a.lastModified)
+      .slice(0, 20)
+
+    let generated = 0
+    for (const session of recent) {
+      const { total } = parseConversation(session.jsonlPath, 0, 1)
+      if (total < 4) continue
+
+      const cached = readDiskCache(session.sessionId)
+      if (cached && cached.messageCount === total) continue
+
+      // Stale or missing — generate in background
+      await generateSummary(session.sessionId)
+      generated++
+    }
+
+    if (generated > 0) {
+      console.log(`[summary] Background refresh: generated ${generated} summaries`)
+    }
+  } catch (err) {
+    console.error('[summary] Background refresh failed:', err instanceof Error ? err.message : err)
+  }
+}
+
+export function startAutoSummaries(): void {
+  // Run 45s after startup to let secrets and watchers initialize
+  setTimeout(() => {
+    refreshSummaries()
+  }, 45_000)
+
+  // Then refresh every 10 minutes
+  setInterval(() => {
+    refreshSummaries()
+  }, 10 * 60_000)
+}
+
 export default app
 export { compressTurns, hookTurnsToCompressed }

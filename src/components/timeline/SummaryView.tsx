@@ -87,6 +87,23 @@ function AISummaryView({ sections, loading, generating, error, onRetry }: {
     )
   }
 
+  if (sections.length === 0 && generating) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 200,
+        gap: 12,
+        color: 'var(--color-text-muted)',
+      }}>
+        <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
+        <span style={{ fontSize: 12 }}>Generating summary...</span>
+      </div>
+    )
+  }
+
   if (sections.length === 0) {
     return (
       <div style={{
