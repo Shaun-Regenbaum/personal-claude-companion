@@ -67,8 +67,33 @@ function extractArtifacts(operations: FileOperation[]): Artifact[] {
     }
   }
 
-  return Array.from(seen.values())
+  const all = Array.from(seen.values())
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+
+  // Always include the most recent plan
+  const latestPlan = all.find((a) => a.action === 'plan')
+
+  // Prioritize .md files and large markdown blocks from the recent operations
+  const mdArtifacts = all.filter((a) => a.action !== 'plan' && (
+    a.filePath.endsWith('.md') || a.filePath.endsWith('.mdx')
+  ))
+  const rest = all.filter((a) => a.action !== 'plan' && !(
+    a.filePath.endsWith('.md') || a.filePath.endsWith('.mdx')
+  ))
+
+  // Build result: latest plan first, then md files, then the rest — cap at 5
+  const result: Artifact[] = []
+  if (latestPlan) result.push(latestPlan)
+  for (const a of mdArtifacts) {
+    if (result.length >= 5) break
+    result.push(a)
+  }
+  for (const a of rest) {
+    if (result.length >= 5) break
+    result.push(a)
+  }
+
+  return result
 }
 
 export function SummaryView({ sessionId, onNavigateToTool, onClickPlan }: SummaryViewProps) {
