@@ -16,6 +16,8 @@ export function useSummary(sessionId: string | null) {
   const [error, setError] = useState<string | null>(null)
   const [fetched, setFetched] = useState(false)
   const sessionRef = useRef(sessionId)
+  const sectionsRef = useRef(sections)
+  sectionsRef.current = sections
 
   // Reset when session changes
   useEffect(() => {
@@ -31,7 +33,7 @@ export function useSummary(sessionId: string | null) {
   const fetchSummary = useCallback(async () => {
     if (!sessionId) return
     // Only show full loading spinner if we have nothing cached
-    if (sections.length === 0) setLoading(true)
+    if (sectionsRef.current.length === 0) setLoading(true)
     setError(null)
     try {
       const data = await api.getSummary(sessionId) as {
@@ -58,27 +60,71 @@ export function useSummary(sessionId: string | null) {
     } finally {
       setLoading(false)
     }
-  }, [sessionId, sections.length])
+  }, [sessionId])
 
-  // Listen for summary-update SSE events to auto-refresh
+  // Listen for SSE events with reconnection
   useEffect(() => {
     if (!sessionId) return
 
-    const evtSource = new EventSource('/api/events')
+    let retries = 0
+    const MAX_RETRIES = 5
+    let evtSource: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    evtSource.addEventListener('summary-update', (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        if (data.sessionId === sessionId) {
-          setGenerating(false)
-          // Refetch to get the fresh data
-          fetchSummary()
+    function connect() {
+      evtSource = new EventSource('/api/events')
+
+      evtSource.addEventListener('generation-started', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.sessionId === sessionId) {
+            setGenerating(true)
+            setError(null)
+          }
+        } catch {}
+      })
+
+      evtSource.addEventListener('summary-update', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.sessionId === sessionId) {
+            setGenerating(false)
+            fetchSummary()
+          }
+        } catch {}
+      })
+
+      evtSource.addEventListener('generation-failed', (e) => {
+        try {
+          const data = JSON.parse(e.data)
+          if (data.sessionId === sessionId) {
+            setGenerating(false)
+            setLoading(false)
+            setError(data.error ?? 'Summary generation failed')
+          }
+        } catch {}
+      })
+
+      evtSource.onerror = () => {
+        evtSource?.close()
+        if (retries < MAX_RETRIES) {
+          retries++
+          reconnectTimer = setTimeout(connect, 3000)
         }
-      } catch {}
-    })
+      }
 
-    evtSource.onerror = () => evtSource.close()
-    return () => evtSource.close()
+      // Reset retry count on successful connection
+      evtSource.onopen = () => {
+        retries = 0
+      }
+    }
+
+    connect()
+
+    return () => {
+      evtSource?.close()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+    }
   }, [sessionId, fetchSummary])
 
   return { sections, loading, generating, error, fetched, fetchSummary }

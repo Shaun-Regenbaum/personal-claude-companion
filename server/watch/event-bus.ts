@@ -1,4 +1,4 @@
-type EventHandler = (event: { type: string; sessionId?: string; timestamp: string }) => void
+type EventHandler = (event: { type: string; sessionId?: string; timestamp: string; error?: string }) => void
 
 const listeners = new Set<EventHandler>()
 
@@ -7,7 +7,7 @@ export function subscribe(handler: EventHandler): () => void {
   return () => listeners.delete(handler)
 }
 
-export function emit(event: { type: string; sessionId?: string; timestamp: string }): void {
+export function emit(event: { type: string; sessionId?: string; timestamp: string; error?: string }): void {
   for (const handler of listeners) {
     try {
       handler(event)

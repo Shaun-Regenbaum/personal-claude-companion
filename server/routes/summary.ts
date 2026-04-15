@@ -110,6 +110,8 @@ async function generateSummary(sessionId: string): Promise<void> {
   if (inFlight.has(sessionId)) return
   inFlight.add(sessionId)
 
+  emit({ type: 'generation-started', sessionId, timestamp: new Date().toISOString() })
+
   try {
     const sessions = await discoverSessions()
     const session = sessions.find((s) => s.sessionId === sessionId)
@@ -135,13 +137,22 @@ async function generateSummary(sessionId: string): Promise<void> {
     const workerUrl = getWorkerUrl()
     const accessHeaders = getCfAccessHeaders()
 
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+
     const res = await fetch(`${workerUrl}/summarize`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...accessHeaders },
       body: JSON.stringify({ turns: recentTurns }),
+      signal: controller.signal,
     })
 
-    if (!res.ok) return
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '')
+      throw new Error(`Worker returned ${res.status}: ${errBody.slice(0, 200)}`)
+    }
 
     const summary = await res.json() as { sections: unknown[] }
 
@@ -155,7 +166,9 @@ async function generateSummary(sessionId: string): Promise<void> {
     emit({ type: 'summary-update', sessionId, timestamp: new Date().toISOString() })
     console.log(`[summary] Generated for ${sessionId} (${turns.length} turns)`)
   } catch (err) {
-    console.error(`[summary] Background generation failed:`, err instanceof Error ? err.message : err)
+    const message = err instanceof Error ? err.message : 'Failed to generate summary'
+    console.error(`[summary] Background generation failed:`, message)
+    emit({ type: 'generation-failed', sessionId, timestamp: new Date().toISOString(), error: message })
   } finally {
     inFlight.delete(sessionId)
   }
@@ -183,20 +196,9 @@ app.post('/:sessionId', async (c) => {
       return c.json({ ...cached.summary, cached: true, stale: cached.messageCount !== total })
     }
 
-    // No cache — generate synchronously for first request
-    // But if it's a huge session, return empty and generate in background
-    if (total > 5000) {
-      generateSummary(sessionId)
-      return c.json({ sections: [], generating: true })
-    }
-
-    // Small enough session — generate inline
-    await generateSummary(sessionId)
-    const fresh = readDiskCache(sessionId)
-    if (fresh) {
-      return c.json(fresh.summary)
-    }
-    return c.json({ error: 'Failed to generate summary' }, 500)
+    // No cache — return immediately and generate in background
+    generateSummary(sessionId)
+    return c.json({ sections: [], generating: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[summary] Error:', message)
