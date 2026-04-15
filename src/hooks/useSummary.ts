@@ -9,6 +9,9 @@ export interface SummarySection {
   openQuestions: string[]
 }
 
+// Safety timeout: if generating state isn't resolved within 90s, clear it and retry
+const GENERATING_TIMEOUT = 90_000
+
 export function useSummary(sessionId: string | null) {
   const [sections, setSections] = useState<SummarySection[]>([])
   const [loading, setLoading] = useState(false)
@@ -17,6 +20,7 @@ export function useSummary(sessionId: string | null) {
   const [fetched, setFetched] = useState(false)
   const sessionRef = useRef(sessionId)
   const sectionsRef = useRef(sections)
+  const generatingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   sectionsRef.current = sections
 
   // Reset when session changes
@@ -27,8 +31,28 @@ export function useSummary(sessionId: string | null) {
       setFetched(false)
       setGenerating(false)
       setError(null)
+      if (generatingTimer.current) {
+        clearTimeout(generatingTimer.current)
+        generatingTimer.current = null
+      }
     }
   }, [sessionId])
+
+  // Safety timeout for generating state
+  useEffect(() => {
+    if (generating) {
+      generatingTimer.current = setTimeout(() => {
+        setGenerating(false)
+        setError('Summary generation timed out')
+      }, GENERATING_TIMEOUT)
+    } else if (generatingTimer.current) {
+      clearTimeout(generatingTimer.current)
+      generatingTimer.current = null
+    }
+    return () => {
+      if (generatingTimer.current) clearTimeout(generatingTimer.current)
+    }
+  }, [generating])
 
   const fetchSummary = useCallback(async () => {
     if (!sessionId) return

@@ -34,8 +34,15 @@ function readDiskCache(sessionId: string): CachedSummary | null {
   const path = join(CACHE_DIR, `${sessionId}.json`)
   try {
     if (!existsSync(path)) return null
-    return JSON.parse(readFileSync(path, 'utf-8'))
-  } catch {
+    const raw = JSON.parse(readFileSync(path, 'utf-8'))
+    // Validate structure
+    if (!raw || typeof raw.messageCount !== 'number' || !raw.summary?.sections) {
+      console.warn(`[summary] Corrupt cache for ${sessionId}, ignoring`)
+      return null
+    }
+    return raw as CachedSummary
+  } catch (err) {
+    console.warn(`[summary] Failed to read cache for ${sessionId}:`, err instanceof Error ? err.message : err)
     return null
   }
 }
@@ -44,7 +51,9 @@ function writeDiskCache(sessionId: string, data: CachedSummary): void {
   const path = join(CACHE_DIR, `${sessionId}.json`)
   try {
     writeFileSync(path, JSON.stringify(data), 'utf-8')
-  } catch {}
+  } catch (err) {
+    console.error(`[summary] Failed to write cache for ${sessionId}:`, err instanceof Error ? err.message : err)
+  }
 }
 
 function compressTurns(messages: ConversationMessage[]): CompressedTurn[] {
@@ -110,12 +119,10 @@ async function generateSummary(sessionId: string): Promise<void> {
   if (inFlight.has(sessionId)) return
   inFlight.add(sessionId)
 
-  emit({ type: 'generation-started', sessionId, timestamp: new Date().toISOString() })
-
   try {
     const sessions = await discoverSessions()
     const session = sessions.find((s) => s.sessionId === sessionId)
-    if (!session) return
+    if (!session) return // No SSE event — session doesn't exist, nothing to notify
 
     const { total } = parseConversation(session.jsonlPath, 0, 1)
 
@@ -131,11 +138,19 @@ async function generateSummary(sessionId: string): Promise<void> {
       turns = compressTurns(messages)
     }
 
-    if (turns.length === 0) return
+    if (turns.length === 0) return // Too few messages, nothing to summarize
 
     const recentTurns = turns.slice(-40)
     const workerUrl = getWorkerUrl()
+
+    if (!workerUrl) {
+      throw new Error('Worker URL not configured')
+    }
+
     const accessHeaders = getCfAccessHeaders()
+
+    // Now that we're actually calling the worker, notify UI
+    emit({ type: 'generation-started', sessionId, timestamp: new Date().toISOString() })
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 60_000)
@@ -156,6 +171,10 @@ async function generateSummary(sessionId: string): Promise<void> {
 
     const summary = await res.json() as { sections: unknown[] }
 
+    if (!summary.sections || !Array.isArray(summary.sections)) {
+      throw new Error('Invalid response: missing sections array')
+    }
+
     writeDiskCache(sessionId, {
       messageCount: total,
       generatedAt: new Date().toISOString(),
@@ -167,7 +186,7 @@ async function generateSummary(sessionId: string): Promise<void> {
     console.log(`[summary] Generated for ${sessionId} (${turns.length} turns)`)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to generate summary'
-    console.error(`[summary] Background generation failed:`, message)
+    console.error(`[summary] Generation failed for ${sessionId}:`, message)
     emit({ type: 'generation-failed', sessionId, timestamp: new Date().toISOString(), error: message })
   } finally {
     inFlight.delete(sessionId)
@@ -207,22 +226,26 @@ app.post('/:sessionId', async (c) => {
 })
 
 async function refreshSummaries(): Promise<void> {
+  const MAX_PER_SWEEP = 5
+
   try {
     const sessions = await discoverSessions()
-    // Sort by most recently modified, take top 20
+    // Sort by most recently modified, take top 20 candidates
     const recent = sessions
       .sort((a, b) => b.lastModified - a.lastModified)
       .slice(0, 20)
 
     let generated = 0
     for (const session of recent) {
+      if (generated >= MAX_PER_SWEEP) break
+
       const { total } = parseConversation(session.jsonlPath, 0, 1)
       if (total < 4) continue
 
       const cached = readDiskCache(session.sessionId)
       if (cached && cached.messageCount === total) continue
 
-      // Stale or missing — generate in background
+      // Stale or missing — generate sequentially to avoid flooding the worker
       await generateSummary(session.sessionId)
       generated++
     }
