@@ -78,8 +78,11 @@ export const api = {
   deleteSkill: (name: string) =>
     fetch(`${API_BASE}/config/skills/${name}`, { method: 'DELETE' }).then((r) => r.json()),
 
-  deleteMcp: (name: string) =>
-    fetch(`${API_BASE}/config/mcp/${name}`, { method: 'DELETE' }).then((r) => r.json()),
+  deleteMcp: (name: string, scope: 'user' | 'project' = 'user', project?: string) => {
+    const search = new URLSearchParams({ scope })
+    if (project) search.set('project', project)
+    return fetch(`${API_BASE}/config/mcp/${encodeURIComponent(name)}?${search}`, { method: 'DELETE' }).then((r) => r.json())
+  },
 
   deletePlugin: (name: string) =>
     fetch(`${API_BASE}/config/plugins/${encodeURIComponent(name)}`, { method: 'DELETE' }).then((r) => r.json()),

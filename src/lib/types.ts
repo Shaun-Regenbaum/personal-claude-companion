@@ -104,6 +104,8 @@ export interface McpServerInfo {
   name: string
   command?: string
   enabled: boolean
+  scope: 'user' | 'project'
+  projectPath?: string
   config: Record<string, unknown>
 }
 

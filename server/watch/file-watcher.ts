@@ -80,9 +80,13 @@ export function startFileWatcher(): void {
     })
   })
 
-  // Watch config
+  // Watch config (MCP servers live in ~/.claude.json, not ~/.claude/settings.json)
   const configWatcher = watch(
-    [join(CLAUDE_DIR, 'settings.json'), join(CLAUDE_DIR, 'settings.local.json')],
+    [
+      join(CLAUDE_DIR, 'settings.json'),
+      join(CLAUDE_DIR, 'settings.local.json'),
+      join(process.env.HOME ?? '', '.claude.json'),
+    ],
     { ignoreInitial: true }
   )
 

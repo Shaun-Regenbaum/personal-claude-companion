@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, readlinkSync, existsSync, writeFileSync, unl
 import { join, basename } from 'path'
 
 const CLAUDE_DIR = join(process.env.HOME ?? '', '.claude')
+const CLAUDE_JSON = join(process.env.HOME ?? '', '.claude.json')
 
 const app = new Hono()
 
@@ -11,7 +12,7 @@ app.get('/', (c) => {
   const localSettings = readJsonSafe(join(CLAUDE_DIR, 'settings.local.json'))
   const plugins = getPlugins()
   const skills = getSkills()
-  const mcpServers = getMcpServers(settings)
+  const mcpServers = getMcpServers()
   const hooks = getHooks(settings)
 
   return c.json({ settings, localSettings, plugins, skills, mcpServers, hooks })
@@ -32,19 +33,27 @@ app.delete('/skills/:name', (c) => {
   }
 })
 
-// Delete an MCP server (remove from settings.json)
+// Delete an MCP server from ~/.claude.json (user scope or a specific project scope)
 app.delete('/mcp/:name', (c) => {
   const name = c.req.param('name')
-  const settingsPath = join(CLAUDE_DIR, 'settings.json')
+  const scope = c.req.query('scope') ?? 'user'
+  const project = c.req.query('project')
+
+  if (scope === 'project' && !project) {
+    return c.json({ error: 'project query param required for scope=project' }, 400)
+  }
+
   try {
-    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'))
-    const servers = settings.mcpServers ?? {}
-    if (!(name in servers)) {
+    const data = JSON.parse(readFileSync(CLAUDE_JSON, 'utf-8'))
+    const container = scope === 'project'
+      ? (data.projects?.[project!]?.mcpServers as Record<string, unknown> | undefined)
+      : (data.mcpServers as Record<string, unknown> | undefined)
+
+    if (!container || !(name in container)) {
       return c.json({ error: 'MCP server not found' }, 404)
     }
-    delete servers[name]
-    settings.mcpServers = servers
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n')
+    delete container[name]
+    writeFileSync(CLAUDE_JSON, JSON.stringify(data, null, 2) + '\n')
     return c.json({ ok: true })
   } catch (e) {
     return c.json({ error: String(e) }, 500)
@@ -161,14 +170,54 @@ function getSkills() {
   }
 }
 
-function getMcpServers(settings: Record<string, unknown>) {
-  const servers = (settings.mcpServers ?? {}) as Record<string, Record<string, unknown>>
-  return Object.entries(servers).map(([name, config]) => ({
-    name,
-    command: config.command as string | undefined,
-    enabled: config.disabled !== true,
-    config,
-  }))
+function getMcpServers() {
+  const data = readJsonSafe(CLAUDE_JSON)
+  const result: Array<{
+    name: string
+    command?: string
+    enabled: boolean
+    scope: 'user' | 'project'
+    projectPath?: string
+    config: Record<string, unknown>
+  }> = []
+
+  const user = (data.mcpServers ?? {}) as Record<string, Record<string, unknown>>
+  for (const [name, config] of Object.entries(user)) {
+    result.push({
+      name,
+      command: describeMcp(config),
+      enabled: config.disabled !== true,
+      scope: 'user',
+      config,
+    })
+  }
+
+  const projects = (data.projects ?? {}) as Record<string, Record<string, unknown>>
+  for (const [path, proj] of Object.entries(projects)) {
+    const projServers = (proj.mcpServers ?? {}) as Record<string, Record<string, unknown>>
+    for (const [name, config] of Object.entries(projServers)) {
+      result.push({
+        name,
+        command: describeMcp(config),
+        enabled: config.disabled !== true,
+        scope: 'project',
+        projectPath: path,
+        config,
+      })
+    }
+  }
+
+  return result
+}
+
+function describeMcp(config: Record<string, unknown>): string | undefined {
+  if (typeof config.command === 'string') {
+    const args = Array.isArray(config.args) ? (config.args as unknown[]).join(' ') : ''
+    return args ? `${config.command} ${args}` : config.command
+  }
+  if (typeof config.url === 'string') return config.url
+  if (typeof config.type === 'string') return config.type
+  return undefined
 }
 
 function getHooks(settings: Record<string, unknown>) {

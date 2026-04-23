@@ -26,13 +26,17 @@ export function ConfigViewer({ sessionCwd }: ConfigViewerProps) {
   const { config, loading, refresh } = useConfig()
   const [activeSection, setActiveSection] = useState<Section>('mcp')
 
-  const handleDelete = useCallback(async (type: string, name: string, extra?: { source?: string; event?: string; index?: number }) => {
+  const handleDelete = useCallback(async (
+    type: string,
+    name: string,
+    extra?: { source?: string; event?: string; index?: number; scope?: 'user' | 'project'; project?: string },
+  ) => {
     const confirmed = window.confirm(`Delete ${type} "${name}"?`)
     if (!confirmed) return
 
     try {
       if (type === 'skill') await api.deleteSkill(name)
-      else if (type === 'MCP server') await api.deleteMcp(name)
+      else if (type === 'MCP server') await api.deleteMcp(name, extra?.scope ?? 'user', extra?.project)
       else if (type === 'plugin') await api.deletePlugin(name)
       else if (type === 'hook' && extra) await api.deleteHook(extra.source!, extra.event!, extra.index!)
       refresh()
@@ -147,17 +151,32 @@ function DeleteButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-function McpSection({ servers, onDelete }: { servers: McpServerInfo[]; onDelete: (type: string, name: string) => void }) {
+function McpSection({ servers, onDelete }: {
+  servers: McpServerInfo[]
+  onDelete: (type: string, name: string, extra: { scope: 'user' | 'project'; project?: string }) => void
+}) {
   if (servers.length === 0) return <EmptyState text="No MCP servers configured" />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {servers.map((server) => (
-        <div key={server.name} className="pzl-card" style={{ padding: 14 }}>
+        <div key={`${server.scope}:${server.projectPath ?? ''}:${server.name}`} className="pzl-card" style={{ padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <Server size={14} style={{ color: server.enabled ? '#859900' : 'var(--color-text-muted)' }} strokeWidth={2} />
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)', flex: 1 }}>
               {server.name}
+            </span>
+            <span style={{
+              fontSize: 9,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              padding: '2px 6px',
+              borderRadius: 2,
+              background: server.scope === 'user' ? '#268bd215' : '#b5890015',
+              color: server.scope === 'user' ? '#268bd2' : '#b58900',
+            }}>
+              {server.scope}
             </span>
             <span style={{
               fontSize: 9,
@@ -171,8 +190,21 @@ function McpSection({ servers, onDelete }: { servers: McpServerInfo[]; onDelete:
             }}>
               {server.enabled ? 'Enabled' : 'Disabled'}
             </span>
-            <DeleteButton onClick={() => onDelete('MCP server', server.name)} />
+            <DeleteButton onClick={() => onDelete('MCP server', server.name, { scope: server.scope, project: server.projectPath })} />
           </div>
+          {server.projectPath && (
+            <div style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              color: 'var(--color-text-muted)',
+              marginBottom: 4,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {server.projectPath}
+            </div>
+          )}
           {server.command && (
             <div style={{
               fontFamily: 'var(--font-mono)',
