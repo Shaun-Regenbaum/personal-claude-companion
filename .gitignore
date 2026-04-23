@@ -6,3 +6,5 @@ companion.debug
 *.log
 .env.local
 package-lock.json
+.playwright-mcp/
+/*.png
